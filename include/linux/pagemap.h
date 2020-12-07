@@ -604,7 +604,21 @@ extern int __lock_page_killable(struct page *page);
 extern int __lock_page_async(struct page *page, struct wait_page_queue *wait);
 extern int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
 				unsigned int flags);
-extern void unlock_page(struct page *page);
+void unlock_folio(struct folio *folio);
+
+/**
+ * unlock_page - Unlock a locked page.
+ * @page: The page.
+ *
+ * Unlocks the page and wakes up any thread sleeping on the page lock.
+ *
+ * Context: May be called from interrupt or process context.  May not be
+ * called from NMI context.
+ */
+static inline void unlock_page(struct page *page)
+{
+	return unlock_folio(page_folio(page));
+}
 
 /*
  * Return true if the page was successfully locked
