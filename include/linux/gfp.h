@@ -501,14 +501,13 @@ static inline int arch_make_page_accessible(struct page *page)
 }
 #endif
 
-struct page *
-__alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order, int preferred_nid,
-							nodemask_t *nodemask);
+struct page *__alloc_pages_nodemask(gfp_t gfp, unsigned int order,
+				int preferred_nid, nodemask_t *nodemask);
 
-static inline struct page *
-__alloc_pages(gfp_t gfp_mask, unsigned int order, int preferred_nid)
+static inline struct page *__alloc_pages(gfp_t gfp, unsigned int order,
+						int preferred_nid)
 {
-	return __alloc_pages_nodemask(gfp_mask, order, preferred_nid, NULL);
+	return __alloc_pages_nodemask(gfp, order, preferred_nid, NULL);
 }
 
 static inline struct folio *__alloc_folio_nodemask(gfp_t gfp,
@@ -516,6 +515,12 @@ static inline struct folio *__alloc_folio_nodemask(gfp_t gfp,
 {
 	return (struct folio *)__alloc_pages_nodemask(gfp | __GFP_COMP, order,
 						preferred_nid, nodemask);
+}
+
+static inline struct folio *__alloc_folio(gfp_t gfp, unsigned int order,
+						int preferred_nid)
+{
+	return __alloc_folio_nodemask(gfp, order, preferred_nid, NULL);
 }
 
 /*
