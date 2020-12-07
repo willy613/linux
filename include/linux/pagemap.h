@@ -437,6 +437,20 @@ static inline bool thp_contains(struct page *head, pgoff_t index)
 	return page_index(head) == (index & ~(thp_nr_pages(head) - 1UL));
 }
 
+static inline pgoff_t folio_index(struct folio *folio)
+{
+        if (unlikely(FolioSwapCache(folio)))
+                return __page_file_index(&folio->page);
+        return folio->page.index;
+}
+
+static inline struct page *folio_page(struct folio *folio, pgoff_t index)
+{
+	index -= folio_index(folio);
+	VM_BUG_ON_PAGE(index >= folio_nr_pages(folio), &folio->page);
+	return &folio->page + index;
+}
+
 /*
  * Given the page we found in the page cache, return the page corresponding
  * to this index in the file
