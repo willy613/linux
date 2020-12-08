@@ -1470,7 +1470,7 @@ void end_folio_writeback(struct folio *folio)
 	 */
 	if (FolioReclaim(folio)) {
 		ClearFolioReclaim(folio);
-		rotate_reclaimable_page(&folio->page);
+		rotate_reclaimable_folio(folio);
 	}
 
 	/*

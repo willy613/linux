@@ -241,19 +241,19 @@ static void pagevec_move_tail_fn(struct page *page, struct lruvec *lruvec)
  * reclaim.  If it still appears to be reclaimable, move it to the tail of the
  * inactive list.
  *
- * rotate_reclaimable_page() must disable IRQs, to prevent nasty races.
+ * rotate_reclaimable_folio() must disable IRQs, to prevent nasty races.
  */
-void rotate_reclaimable_page(struct page *page)
+void rotate_reclaimable_folio(struct folio *folio)
 {
-	if (!PageLocked(page) && !PageDirty(page) &&
-	    !PageUnevictable(page) && PageLRU(page)) {
+	if (!FolioLocked(folio) && !FolioDirty(folio) &&
+	    !FolioUnevictable(folio) && FolioLRU(folio)) {
 		struct pagevec *pvec;
 		unsigned long flags;
 
-		get_page(page);
+		get_folio(folio);
 		local_lock_irqsave(&lru_rotate.lock, flags);
 		pvec = this_cpu_ptr(&lru_rotate.pvec);
-		if (!pagevec_add(pvec, page) || PageCompound(page))
+		if (!pagevec_add(pvec, &folio->page) || FolioMulti(folio))
 			pagevec_lru_move_fn(pvec, pagevec_move_tail_fn);
 		local_unlock_irqrestore(&lru_rotate.lock, flags);
 	}
