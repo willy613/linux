@@ -221,7 +221,8 @@ int overcommit_policy_handler(struct ctl_table *, int, void *, size_t *,
  * when CONFIG_DEBUG_INFO_BTF is enabled because __add_to_page_cache_locked()
  * is referred to by BPF code. This must be visible for error injection.
  */
-int __add_to_page_cache_locked(struct page *page, struct address_space *mapping,
+int __add_to_page_cache_locked(struct folio *folio,
+		struct address_space *mapping,
 		pgoff_t index, gfp_t gfp, void **shadowp);
 
 #define nth_page(page,n) pfn_to_page(page_to_pfn((page)) + (n))
