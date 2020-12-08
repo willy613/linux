@@ -88,7 +88,7 @@ static void __page_cache_release(struct page *page)
 		del_page_from_lru_list(page, lruvec, page_off_lru(page));
 		unlock_page_lruvec_irqrestore(lruvec, flags);
 	}
-	__ClearPageWaiters(page);
+	__ClearFolioWaiters(page_folio(page));
 }
 
 static void __put_single_page(struct page *page)
