@@ -862,8 +862,8 @@ static inline int add_to_page_cache_lru(struct page *page,
  * struct readahead_control - Describes a readahead request.
  *
  * A readahead request is for consecutive pages.  Filesystems which
- * implement the ->readahead method should call readahead_page() or
- * readahead_page_batch() in a loop and attempt to start I/O against
+ * implement the ->readahead method should call readahead_folio() or
+ * readahead_folio_batch() in a loop and attempt to start I/O against
  * each page in the request.
  *
  * Most of the fields in this struct are private and should be accessed
@@ -944,17 +944,16 @@ void page_cache_async_readahead(struct address_space *mapping,
 }
 
 /**
- * readahead_page - Get the next page to read.
+ * readahead_folio - Get the next folio to read.
  * @rac: The current readahead request.
  *
- * Context: The page is locked and has an elevated refcount.  The caller
- * should decreases the refcount once the page has been submitted for I/O
- * and unlock the page once all I/O to that page has completed.
- * Return: A pointer to the next page, or %NULL if we are done.
+ * Context: The folio is locked.  The caller should unlock the folio once
+ * all I/O to that folio has completed.
+ * Return: A pointer to the next folio, or %NULL if we are done.
  */
-static inline struct page *readahead_page(struct readahead_control *rac)
+static inline struct folio *readahead_folio(struct readahead_control *rac)
 {
-	struct page *page;
+	struct folio *folio;
 
 	BUG_ON(rac->_batch_count > rac->_nr_pages);
 	rac->_nr_pages -= rac->_batch_count;
@@ -965,19 +964,19 @@ static inline struct page *readahead_page(struct readahead_control *rac)
 		return NULL;
 	}
 
-	page = xa_load(&rac->mapping->i_pages, rac->_index);
-	VM_BUG_ON_PAGE(!PageLocked(page), page);
-	rac->_batch_count = thp_nr_pages(page);
+	folio = xa_load(&rac->mapping->i_pages, rac->_index);
+	VM_BUG_ON_PAGE(!FolioLocked(folio), &folio->page);
+	rac->_batch_count = folio_nr_pages(folio);
 
-	return page;
+	return folio;
 }
 
 static inline unsigned int __readahead_batch(struct readahead_control *rac,
-		struct page **array, unsigned int array_sz)
+		struct folio **array, unsigned int array_sz)
 {
 	unsigned int i = 0;
 	XA_STATE(xas, &rac->mapping->i_pages, 0);
-	struct page *page;
+	struct folio *folio;
 
 	BUG_ON(rac->_batch_count > rac->_nr_pages);
 	rac->_nr_pages -= rac->_batch_count;
@@ -986,13 +985,12 @@ static inline unsigned int __readahead_batch(struct readahead_control *rac,
 
 	xas_set(&xas, rac->_index);
 	rcu_read_lock();
-	xas_for_each(&xas, page, rac->_index + rac->_nr_pages - 1) {
-		if (xas_retry(&xas, page))
+	xas_for_each(&xas, folio, rac->_index + rac->_nr_pages - 1) {
+		if (xas_retry(&xas, folio))
 			continue;
-		VM_BUG_ON_PAGE(!PageLocked(page), page);
-		VM_BUG_ON_PAGE(PageTail(page), page);
-		array[i++] = page;
-		rac->_batch_count += thp_nr_pages(page);
+		VM_BUG_ON_PAGE(!FolioLocked(folio), &folio->page);
+		array[i++] = folio;
+		rac->_batch_count += folio_nr_pages(folio);
 
 		/*
 		 * The page cache isn't using multi-index entries yet,
@@ -1000,7 +998,7 @@ static inline unsigned int __readahead_batch(struct readahead_control *rac,
 		 * next index.  This can be removed once the page cache
 		 * is converted.
 		 */
-		if (PageHead(page))
+		if (FolioMulti(folio))
 			xas_set(&xas, rac->_index + rac->_batch_count);
 
 		if (i == array_sz)
@@ -1012,17 +1010,16 @@ static inline unsigned int __readahead_batch(struct readahead_control *rac,
 }
 
 /**
- * readahead_page_batch - Get a batch of pages to read.
+ * readahead_folio_batch - Get a batch of folios to read.
  * @rac: The current readahead request.
- * @array: An array of pointers to struct page.
+ * @array: An array of pointers to struct folio.
  *
- * Context: The pages are locked and have an elevated refcount.  The caller
- * should decreases the refcount once the page has been submitted for I/O
- * and unlock the page once all I/O to that page has completed.
- * Return: The number of pages placed in the array.  0 indicates the request
+ * Context: The folios are locked.  The caller should unlock the folio
+ * once all I/O to that folio has completed.
+ * Return: The number of folios placed in the array.  0 indicates the request
  * is complete.
  */
-#define readahead_page_batch(rac, array)				\
+#define readahead_folio_batch(rac, array)				\
 	__readahead_batch(rac, array, ARRAY_SIZE(array))
 
 /**

@@ -872,3 +872,11 @@ its result is kern_unmount() or kern_unmount_array().
 
 mnt_want_write_file() can now only be paired with mnt_drop_write_file(),
 whereas previously it could be paired with mnt_drop_write() as well.
+
+---
+
+**mandatory**
+
+->readahead() has changed the reference count on struct page so that
+the filesystem *does not* drop a reference.  This is in line with how
+->readpage works but different from how ->readpages used to work.

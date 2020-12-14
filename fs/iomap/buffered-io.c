@@ -361,11 +361,10 @@ iomap_readahead_actor(struct inode *inode, loff_t pos, loff_t length,
 		if (ctx->cur_page && offset_in_page(pos + done) == 0) {
 			if (!ctx->cur_page_in_bio)
 				unlock_page(ctx->cur_page);
-			put_page(ctx->cur_page);
 			ctx->cur_page = NULL;
 		}
 		if (!ctx->cur_page) {
-			ctx->cur_page = readahead_page(ctx->rac);
+			ctx->cur_page = &readahead_folio(ctx->rac)->page;
 			ctx->cur_page_in_bio = false;
 		}
 		ret = iomap_readpage_actor(inode, pos + done, length - done,
@@ -417,7 +416,6 @@ void iomap_readahead(struct readahead_control *rac, const struct iomap_ops *ops)
 	if (ctx.cur_page) {
 		if (!ctx.cur_page_in_bio)
 			unlock_page(ctx.cur_page);
-		put_page(ctx.cur_page);
 	}
 }
 EXPORT_SYMBOL_GPL(iomap_readahead);

@@ -1336,6 +1336,7 @@ static void z_erofs_readahead(struct readahead_control *rac)
 	bool sync = (nr_pages <= sbi->ctx.max_sync_decompress_pages);
 	struct z_erofs_decompress_frontend f = DECOMPRESS_FRONTEND_INIT(inode);
 	struct page *page, *head = NULL;
+	struct folio *folio;
 	LIST_HEAD(pagepool);
 
 	trace_erofs_readpages(inode, readahead_index(rac), nr_pages, false);
@@ -1343,7 +1344,8 @@ static void z_erofs_readahead(struct readahead_control *rac)
 	f.readahead = true;
 	f.headoffset = readahead_pos(rac);
 
-	while ((page = readahead_page(rac))) {
+	while ((folio = readahead_folio(rac))) {
+		page = &folio->page;
 		prefetchw(&page->flags);
 
 		/*
@@ -1369,7 +1371,6 @@ static void z_erofs_readahead(struct readahead_control *rac)
 			erofs_err(inode->i_sb,
 				  "readahead error at page %lu @ nid %llu",
 				  page->index, EROFS_I(inode)->nid);
-		put_page(page);
 	}
 
 	(void)z_erofs_collector_end(&f.clt);

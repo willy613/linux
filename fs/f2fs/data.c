@@ -2317,10 +2317,10 @@ static int f2fs_mpage_readpages(struct inode *inode,
 
 	for (; nr_pages; nr_pages--) {
 		if (rac) {
-			page = readahead_page(rac);
+			page = &readahead_folio(rac)->page;
 			prefetchw(&page->flags);
 			if (drop_ra) {
-				f2fs_put_page(page, 1);
+				unlock_page(page);
 				continue;
 			}
 		}
@@ -2366,11 +2366,6 @@ set_error_page:
 		}
 #ifdef CONFIG_F2FS_FS_COMPRESSION
 next_page:
-#endif
-		if (rac)
-			put_page(page);
-
-#ifdef CONFIG_F2FS_FS_COMPRESSION
 		if (f2fs_compressed_file(inode)) {
 			/* last page */
 			if (nr_pages == 1 && !f2fs_cluster_is_empty(&cc)) {

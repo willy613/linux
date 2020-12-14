@@ -911,7 +911,6 @@ static void fuse_readpages_end(struct fuse_mount *fm, struct fuse_args *args,
 		else
 			SetPageError(page);
 		unlock_page(page);
-		put_page(page);
 	}
 	if (ia->ff)
 		fuse_file_put(ia->ff, false, false);
@@ -980,7 +979,8 @@ static void fuse_readahead(struct readahead_control *rac)
 		if (!ia)
 			return;
 		ap = &ia->ap;
-		nr_pages = __readahead_batch(rac, ap->pages, nr_pages);
+		nr_pages = __readahead_batch(rac, (struct folio **)ap->pages,
+						nr_pages);
 		for (i = 0; i < nr_pages; i++) {
 			fuse_wait_on_page_writeback(inode,
 						    readahead_index(rac) + i);

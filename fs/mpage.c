@@ -384,12 +384,11 @@ void mpage_readahead(struct readahead_control *rac, get_block_t get_block)
 		.is_readahead = true,
 	};
 
-	while ((page = readahead_page(rac))) {
+	while ((page = &readahead_folio(rac)->page)) {
 		prefetchw(&page->flags);
 		args.page = page;
 		args.nr_pages = readahead_count(rac);
 		args.bio = do_mpage_readpage(&args);
-		put_page(page);
 	}
 	if (args.bio)
 		mpage_bio_submit(REQ_OP_READ, REQ_RAHEAD, args.bio);
