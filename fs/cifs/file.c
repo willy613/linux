@@ -4553,8 +4553,9 @@ read_complete:
 	return rc;
 }
 
-static int cifs_readpage(struct file *file, struct page *page)
+static int cifs_readpage(struct file *file, struct folio *folio)
 {
+	struct page *page = &folio->page;
 	loff_t offset = (loff_t)page->index << PAGE_SHIFT;
 	int rc = -EACCES;
 	unsigned int xid;

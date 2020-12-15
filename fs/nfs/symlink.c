@@ -26,21 +26,21 @@
  * and straight-forward than readdir caching.
  */
 
-static int nfs_symlink_filler(void *data, struct page *page)
+static int nfs_symlink_filler(void *data, struct folio *folio)
 {
 	struct inode *inode = data;
 	int error;
 
-	error = NFS_PROTO(inode)->readlink(inode, page, 0, PAGE_SIZE);
+	error = NFS_PROTO(inode)->readlink(inode, &folio->page, 0, PAGE_SIZE);
 	if (error < 0)
 		goto error;
-	SetPageUptodate(page);
-	unlock_page(page);
+	SetFolioUptodate(folio);
+	unlock_folio(folio);
 	return 0;
 
 error:
-	SetPageError(page);
-	unlock_page(page);
+	SetFolioError(folio);
+	unlock_folio(folio);
 	return -EIO;
 }
 

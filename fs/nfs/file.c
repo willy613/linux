@@ -340,9 +340,10 @@ start:
 		put_page(page);
 	} else if (!once_thru &&
 		   nfs_want_read_modify_write(file, page, pos, len)) {
+		struct folio *folio = page_folio(page);
 		once_thru = 1;
-		ret = nfs_readpage(file, page);
-		put_page(page);
+		ret = nfs_readpage(file, folio);
+		put_folio(folio);
 		if (!ret)
 			goto start;
 	}

@@ -244,8 +244,9 @@ static int orangefs_writepages(struct address_space *mapping,
 
 static int orangefs_launder_page(struct page *);
 
-static int orangefs_readpage(struct file *file, struct page *page)
+static int orangefs_readpage(struct file *file, struct folio *folio)
 {
+	struct page *page = &folio->page;
 	struct inode *inode = page->mapping->host;
 	struct iov_iter iter;
 	struct bio_vec bv;

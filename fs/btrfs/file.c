@@ -1331,16 +1331,17 @@ static int prepare_uptodate_page(struct inode *inode,
 
 	if (((pos & (PAGE_SIZE - 1)) || force_uptodate) &&
 	    !PageUptodate(page)) {
-		ret = btrfs_readpage(NULL, page);
+		struct folio *folio = page_folio(page);
+		ret = btrfs_readpage(NULL, folio);
 		if (ret)
 			return ret;
-		lock_page(page);
-		if (!PageUptodate(page)) {
-			unlock_page(page);
+		lock_folio(folio);
+		if (!FolioUptodate(folio)) {
+			unlock_folio(folio);
 			return -EIO;
 		}
-		if (page->mapping != inode->i_mapping) {
-			unlock_page(page);
+		if (folio->page.mapping != inode->i_mapping) {
+			unlock_folio(folio);
 			return -EAGAIN;
 		}
 	}

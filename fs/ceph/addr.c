@@ -259,11 +259,11 @@ out:
 	return err < 0 ? err : 0;
 }
 
-static int ceph_readpage(struct file *filp, struct page *page)
+static int ceph_readpage(struct file *filp, struct folio *folio)
 {
-	int r = ceph_do_readpage(filp, page);
+	int r = ceph_do_readpage(filp, &folio->page);
 	if (r != -EINPROGRESS)
-		unlock_page(page);
+		unlock_folio(folio);
 	else
 		r = 0;
 	return r;

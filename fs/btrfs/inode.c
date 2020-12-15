@@ -4722,14 +4722,15 @@ again:
 	}
 
 	if (!PageUptodate(page)) {
-		ret = btrfs_readpage(NULL, page);
-		lock_page(page);
-		if (page->mapping != mapping) {
-			unlock_page(page);
-			put_page(page);
+		struct folio *folio = page_folio(page);
+		ret = btrfs_readpage(NULL, folio);
+		lock_folio(folio);
+		if (folio->page.mapping != mapping) {
+			unlock_folio(folio);
+			put_folio(folio);
 			goto again;
 		}
-		if (!PageUptodate(page)) {
+		if (!FolioUptodate(folio)) {
 			ret = -EIO;
 			goto out_unlock;
 		}
@@ -8060,8 +8061,9 @@ static int btrfs_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 	return extent_fiemap(BTRFS_I(inode), fieinfo, start, len);
 }
 
-int btrfs_readpage(struct file *file, struct page *page)
+int btrfs_readpage(struct file *file, struct folio *folio)
 {
+	struct page *page = &folio->page;
 	struct btrfs_inode *inode = BTRFS_I(page->mapping->host);
 	u64 start = page_offset(page);
 	u64 end = start + PAGE_SIZE - 1;

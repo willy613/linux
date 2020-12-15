@@ -261,8 +261,9 @@ submit_bio_out:
  * since we dont have write or truncate flows, so no inode
  * locking needs to be held at the moment.
  */
-static int erofs_raw_access_readpage(struct file *file, struct page *page)
+static int erofs_raw_access_readpage(struct file *file, struct folio *folio)
 {
+	struct page *page = &folio->page;
 	erofs_off_t last_block;
 	struct bio *bio;
 

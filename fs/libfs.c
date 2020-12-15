@@ -509,12 +509,12 @@ int simple_setattr(struct dentry *dentry, struct iattr *iattr)
 }
 EXPORT_SYMBOL(simple_setattr);
 
-int simple_readpage(struct file *file, struct page *page)
+int simple_readpage(struct file *file, struct folio *folio)
 {
-	clear_highpage(page);
-	flush_dcache_page(page);
-	SetPageUptodate(page);
-	unlock_page(page);
+	clear_highpage(&folio->page);
+	flush_dcache_page(&folio->page);
+	SetFolioUptodate(folio);
+	unlock_folio(folio);
 	return 0;
 }
 EXPORT_SYMBOL(simple_readpage);

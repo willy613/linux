@@ -57,11 +57,11 @@ static void __udf_adinicb_readpage(struct page *page)
 	kunmap_atomic(kaddr);
 }
 
-static int udf_adinicb_readpage(struct file *file, struct page *page)
+static int udf_adinicb_readpage(struct file *file, struct folio *folio)
 {
-	BUG_ON(!PageLocked(page));
-	__udf_adinicb_readpage(page);
-	unlock_page(page);
+	BUG_ON(!FolioLocked(folio));
+	__udf_adinicb_readpage(&folio->page);
+	unlock_folio(folio);
 
 	return 0;
 }

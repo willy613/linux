@@ -2963,12 +2963,13 @@ retry:
 		}
 
 		if (!PageUptodate(page)) {
-			ret = block_read_full_page(page, ocfs2_get_block);
+			struct folio *folio = page_folio(page);
+			ret = block_read_full_page(folio, ocfs2_get_block);
 			if (ret) {
 				mlog_errno(ret);
 				goto unlock;
 			}
-			lock_page(page);
+			lock_folio(folio);
 		}
 
 		if (page_has_buffers(page)) {

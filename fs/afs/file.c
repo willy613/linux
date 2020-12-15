@@ -17,7 +17,7 @@
 #include "internal.h"
 
 static int afs_file_mmap(struct file *file, struct vm_area_struct *vma);
-static int afs_readpage(struct file *file, struct page *page);
+static int afs_readpage(struct file *file, struct folio *folio);
 static void afs_invalidatepage(struct page *page, unsigned int offset,
 			       unsigned int length);
 static int afs_releasepage(struct page *page, gfp_t gfp_flags);
@@ -389,8 +389,9 @@ error:
  * read page from file, directory or symlink, given a file to nominate the key
  * to be used
  */
-static int afs_readpage(struct file *file, struct page *page)
+static int afs_readpage(struct file *file, struct folio *folio)
 {
+	struct page *page = &folio->page;
 	struct key *key;
 	int ret;
 

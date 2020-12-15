@@ -310,8 +310,9 @@ static void nfs_readpage_result(struct rpc_task *task,
  *  -	The error flag is set for this page. This happens only when a
  *	previous async read operation failed.
  */
-int nfs_readpage(struct file *file, struct page *page)
+int nfs_readpage(struct file *file, struct folio *folio)
 {
+	struct page *page = &folio->page;
 	struct nfs_open_context *ctx;
 	struct inode *inode = page_file_mapping(page)->host;
 	int		error;
@@ -372,9 +373,9 @@ struct nfs_readdesc {
 	struct nfs_open_context *ctx;
 };
 
-static int
-readpage_async_filler(void *data, struct page *page)
+static int readpage_async_filler(void *data, struct folio *folio)
 {
+	struct page *page = &folio->page;
 	struct nfs_readdesc *desc = (struct nfs_readdesc *)data;
 	struct nfs_page *new;
 	unsigned int len;

@@ -4991,11 +4991,12 @@ static int put_file_data(struct send_ctx *sctx, u64 offset, u32 len)
 		}
 
 		if (!PageUptodate(page)) {
-			btrfs_readpage(NULL, page);
-			lock_page(page);
-			if (!PageUptodate(page)) {
-				unlock_page(page);
-				put_page(page);
+			struct folio *folio = page_folio(page);
+			btrfs_readpage(NULL, folio);
+			lock_folio(folio);
+			if (!FolioUptodate(folio)) {
+				unlock_folio(folio);
+				put_folio(folio);
 				ret = -EIO;
 				break;
 			}

@@ -1908,14 +1908,14 @@ void fuse_init_dir(struct inode *inode)
 	fi->rdc.version = 0;
 }
 
-static int fuse_symlink_readpage(struct file *null, struct page *page)
+static int fuse_symlink_readpage(struct file *null, struct folio *folio)
 {
-	int err = fuse_readlink_page(page->mapping->host, page);
+	int err = fuse_readlink_page(folio->page.mapping->host, &folio->page);
 
 	if (!err)
-		SetPageUptodate(page);
+		SetFolioUptodate(folio);
 
-	unlock_page(page);
+	unlock_folio(folio);
 
 	return err;
 }

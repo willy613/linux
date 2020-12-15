@@ -2211,7 +2211,7 @@ generic_file_buffered_read_readpage(struct kiocb *iocb,
 	 */
 	ClearPageError(page);
 	/* Start the actual read. The read will unlock the page. */
-	error = mapping->a_ops->readpage(filp, page);
+	error = mapping->a_ops->readpage(filp, page_folio(page));
 
 	if (unlikely(error)) {
 		put_page(page);
@@ -2998,7 +2998,7 @@ page_not_uptodate:
 	 */
 	ClearPageError(page);
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-	error = mapping->a_ops->readpage(file, page);
+	error = mapping->a_ops->readpage(file, page_folio(page));
 	if (!error) {
 		wait_on_page_locked(page);
 		if (!PageUptodate(page))
@@ -3185,10 +3185,7 @@ static struct page *wait_on_page_read(struct page *page)
 }
 
 static struct page *do_read_cache_page(struct address_space *mapping,
-				pgoff_t index,
-				int (*filler)(void *, struct page *),
-				void *data,
-				gfp_t gfp)
+		pgoff_t index, filler_t filler, void *data, gfp_t gfp)
 {
 	struct page *page;
 	int err;
@@ -3209,9 +3206,9 @@ repeat:
 
 filler:
 		if (filler)
-			err = filler(data, page);
+			err = filler(data, page_folio(page));
 		else
-			err = mapping->a_ops->readpage(data, page);
+			err = mapping->a_ops->readpage(data, page_folio(page));
 
 		if (err < 0) {
 			put_page(page);
@@ -3305,10 +3302,8 @@ out:
  *
  * Return: up to date page on success, ERR_PTR() on failure.
  */
-struct page *read_cache_page(struct address_space *mapping,
-				pgoff_t index,
-				int (*filler)(void *, struct page *),
-				void *data)
+struct page *read_cache_page(struct address_space *mapping, pgoff_t index,
+		filler_t filler, void *data)
 {
 	return do_read_cache_page(mapping, index, filler, data,
 			mapping_gfp_mask(mapping));

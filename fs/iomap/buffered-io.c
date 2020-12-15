@@ -312,15 +312,15 @@ done:
 	return pos - orig_pos + plen;
 }
 
-int
-iomap_readpage(struct page *page, const struct iomap_ops *ops)
+int iomap_readpage(struct folio *folio, const struct iomap_ops *ops)
 {
+	struct page *page = &folio->page;
 	struct iomap_readpage_ctx ctx = { .cur_page = page };
 	struct inode *inode = page->mapping->host;
 	unsigned poff;
 	loff_t ret;
 
-	trace_iomap_readpage(page->mapping->host, 1);
+	trace_iomap_readpage(inode, 1);
 
 	for (poff = 0; poff < PAGE_SIZE; poff += ret) {
 		ret = iomap_apply(inode, page_offset(page) + poff,
@@ -328,7 +328,7 @@ iomap_readpage(struct page *page, const struct iomap_ops *ops)
 				iomap_readpage_actor);
 		if (ret <= 0) {
 			WARN_ON_ONCE(ret == 0);
-			SetPageError(page);
+			SetFolioError(folio);
 			break;
 		}
 	}
@@ -338,7 +338,7 @@ iomap_readpage(struct page *page, const struct iomap_ops *ops)
 		WARN_ON_ONCE(!ctx.cur_page_in_bio);
 	} else {
 		WARN_ON_ONCE(ctx.cur_page_in_bio);
-		unlock_page(page);
+		unlock_folio(folio);
 	}
 
 	/*
