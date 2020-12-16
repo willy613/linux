@@ -411,36 +411,34 @@ static void __lru_cache_activate_page(struct page *page)
  * When a newly allocated page is not yet visible, so safe for non-atomic ops,
  * __SetPageReferenced(page) may be substituted for mark_page_accessed(page).
  */
-void mark_page_accessed(struct page *page)
+void mark_folio_accessed(struct folio *folio)
 {
-	page = compound_head(page);
-
-	if (!PageReferenced(page)) {
-		SetPageReferenced(page);
-	} else if (PageUnevictable(page)) {
+	if (!FolioReferenced(folio)) {
+		SetFolioReferenced(folio);
+	} else if (FolioUnevictable(folio)) {
 		/*
 		 * Unevictable pages are on the "LRU_UNEVICTABLE" list. But,
 		 * this list is never rotated or maintained, so marking an
 		 * evictable page accessed has no effect.
 		 */
-	} else if (!PageActive(page)) {
+	} else if (!FolioActive(folio)) {
 		/*
 		 * If the page is on the LRU, queue it for activation via
 		 * lru_pvecs.activate_page. Otherwise, assume the page is on a
 		 * pagevec, mark it active and it'll be moved to the active
 		 * LRU on the next drain.
 		 */
-		if (PageLRU(page))
-			activate_page(page);
+		if (FolioLRU(folio))
+			activate_page(&folio->page);
 		else
-			__lru_cache_activate_page(page);
-		ClearPageReferenced(page);
-		workingset_activation(page);
+			__lru_cache_activate_page(&folio->page);
+		ClearFolioReferenced(folio);
+		workingset_activation(&folio->page);
 	}
-	if (page_is_idle(page))
-		clear_page_idle(page);
+	if (page_is_idle(&folio->page))
+		clear_page_idle(&folio->page);
 }
-EXPORT_SYMBOL(mark_page_accessed);
+EXPORT_SYMBOL(mark_folio_accessed);
 
 /**
  * lru_cache_add - add a page to a page list
