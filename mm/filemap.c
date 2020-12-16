@@ -1707,12 +1707,93 @@ out:
 	return folio;
 }
 
+struct folio *filemap_get_folio(struct address_space *mapping, pgoff_t index,
+		int fgp_flags, gfp_t gfp)
+{
+	struct folio *folio;
+
+repeat:
+	folio = mapping_get_entry(mapping, index);
+	if (xa_is_value(folio)) {
+		if (fgp_flags & FGP_ENTRY)
+			return folio;
+		folio = NULL;
+	}
+	if (!folio)
+		goto no_page;
+
+	if (fgp_flags & FGP_LOCK) {
+		if (fgp_flags & FGP_NOWAIT) {
+			if (!trylock_folio(folio)) {
+				put_folio(folio);
+				return NULL;
+			}
+		} else {
+			lock_folio(folio);
+		}
+
+		/* Has the page been truncated? */
+		if (unlikely(folio->page.mapping != mapping)) {
+			unlock_folio(folio);
+			put_folio(folio);
+			goto repeat;
+		}
+		VM_BUG_ON_PAGE(!folio_contains(folio, index), &folio->page);
+	}
+
+	if (fgp_flags & FGP_ACCESSED)
+		mark_folio_accessed(folio);
+	else if (fgp_flags & FGP_WRITE) {
+		/* Clear idle flag for buffer write */
+		if (page_is_idle(&folio->page))
+			clear_page_idle(&folio->page);
+	}
+
+no_page:
+	if (!folio && (fgp_flags & FGP_CREAT)) {
+		int err;
+		if ((fgp_flags & FGP_WRITE) && mapping_can_writeback(mapping))
+			gfp |= __GFP_WRITE;
+		if (fgp_flags & FGP_NOFS)
+			gfp &= ~__GFP_FS;
+
+		folio = __page_cache_alloc(gfp, 0);
+		if (!folio)
+			return NULL;
+
+		if (WARN_ON_ONCE(!(fgp_flags & (FGP_LOCK | FGP_FOR_MMAP))))
+			fgp_flags |= FGP_LOCK;
+
+		/* Init accessed so avoid atomic mark_page_accessed later */
+		if (fgp_flags & FGP_ACCESSED)
+			__SetFolioReferenced(folio);
+
+		err = add_to_page_cache_lru(&folio->page, mapping, index, gfp);
+		if (unlikely(err)) {
+			put_folio(folio);
+			folio = NULL;
+			if (err == -EEXIST)
+				goto repeat;
+		}
+
+		/*
+		 * add_to_page_cache_lru locks the page, and for mmap we expect
+		 * an unlocked page.
+		 */
+		if (folio && (fgp_flags & FGP_FOR_MMAP))
+			unlock_folio(folio);
+	}
+
+	return folio;
+}
+EXPORT_SYMBOL(filemap_get_folio);
+
 /**
  * pagecache_get_page - Find and get a reference to a page.
  * @mapping: The address_space to search.
  * @index: The page index.
  * @fgp_flags: %FGP flags modify how the page is returned.
- * @gfp_mask: Memory allocation flags to use if %FGP_CREAT is specified.
+ * @gfp: Memory allocation flags to use if %FGP_CREAT is specified.
  *
  * Looks up the page cache entry at @mapping & @index.
  *
@@ -1742,85 +1823,13 @@ out:
  * Return: The found page or %NULL otherwise.
  */
 struct page *pagecache_get_page(struct address_space *mapping, pgoff_t index,
-		int fgp_flags, gfp_t gfp_mask)
+		int fgp_flags, gfp_t gfp)
 {
-	struct page *page;
+	struct folio *folio = filemap_get_folio(mapping, index, fgp_flags, gfp);
 
-repeat:
-	page = &mapping_get_entry(mapping, index)->page;
-	if (xa_is_value(page)) {
-		if (fgp_flags & FGP_ENTRY)
-			return page;
-		page = NULL;
-	}
-	if (!page)
-		goto no_page;
-
-	if (fgp_flags & FGP_LOCK) {
-		if (fgp_flags & FGP_NOWAIT) {
-			if (!trylock_page(page)) {
-				put_page(page);
-				return NULL;
-			}
-		} else {
-			lock_page(page);
-		}
-
-		/* Has the page been truncated? */
-		if (unlikely(page->mapping != mapping)) {
-			unlock_page(page);
-			put_page(page);
-			goto repeat;
-		}
-		VM_BUG_ON_PAGE(!thp_contains(page, index), page);
-	}
-
-	if (fgp_flags & FGP_ACCESSED)
-		mark_page_accessed(page);
-	else if (fgp_flags & FGP_WRITE) {
-		/* Clear idle flag for buffer write */
-		if (page_is_idle(page))
-			clear_page_idle(page);
-	}
-	if (!(fgp_flags & FGP_HEAD))
-		page = find_subpage(page, index);
-
-no_page:
-	if (!page && (fgp_flags & FGP_CREAT)) {
-		int err;
-		if ((fgp_flags & FGP_WRITE) && mapping_can_writeback(mapping))
-			gfp_mask |= __GFP_WRITE;
-		if (fgp_flags & FGP_NOFS)
-			gfp_mask &= ~__GFP_FS;
-
-		page = &__page_cache_alloc(gfp_mask, 0)->page;
-		if (!page)
-			return NULL;
-
-		if (WARN_ON_ONCE(!(fgp_flags & (FGP_LOCK | FGP_FOR_MMAP))))
-			fgp_flags |= FGP_LOCK;
-
-		/* Init accessed so avoid atomic mark_page_accessed later */
-		if (fgp_flags & FGP_ACCESSED)
-			__SetPageReferenced(page);
-
-		err = add_to_page_cache_lru(page, mapping, index, gfp_mask);
-		if (unlikely(err)) {
-			put_page(page);
-			page = NULL;
-			if (err == -EEXIST)
-				goto repeat;
-		}
-
-		/*
-		 * add_to_page_cache_lru locks the page, and for mmap we expect
-		 * an unlocked page.
-		 */
-		if (page && (fgp_flags & FGP_FOR_MMAP))
-			unlock_page(page);
-	}
-
-	return page;
+	if ((fgp_flags & FGP_HEAD) || !folio || xa_is_value(folio))
+		return &folio->page;
+	return folio_page(folio, index);
 }
 EXPORT_SYMBOL(pagecache_get_page);
 
