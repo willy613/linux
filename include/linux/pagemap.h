@@ -710,19 +710,27 @@ extern int wait_on_folio_bit_killable(struct folio *folio, int bit_nr);
  * ie with increased "page->count" so that the page won't
  * go away during the wait..
  */
-static inline void wait_on_page_locked(struct page *page)
+static inline void wait_on_folio_locked(struct folio *folio)
 {
-	struct folio *folio = page_folio(page);
 	if (FolioLocked(folio))
 		wait_on_folio_bit(folio, PG_locked);
 }
 
-static inline int wait_on_page_locked_killable(struct page *page)
+static inline int wait_on_folio_locked_killable(struct folio *folio)
 {
-	struct folio *folio = page_folio(page);
 	if (!FolioLocked(folio))
 		return 0;
 	return wait_on_folio_bit_killable(folio, PG_locked);
+}
+
+static inline void wait_on_page_locked(struct page *page)
+{
+	wait_on_folio_locked(page_folio(page));
+}
+
+static inline int wait_on_page_locked_killable(struct page *page)
+{
+	return wait_on_folio_locked_killable(page_folio(page));
 }
 
 extern void put_and_wait_on_page_locked(struct page *page);
