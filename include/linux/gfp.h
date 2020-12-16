@@ -524,6 +524,12 @@ __alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
 	return __alloc_pages(gfp_mask, order, nid);
 }
 
+static inline
+struct folio *__alloc_folio_node(int nid, gfp_t gfp, unsigned int order)
+{
+	return (struct folio *)__alloc_pages_node(nid, gfp | __GFP_COMP, order);
+}
+
 /*
  * Allocate pages, preferring the node given as nid. When nid == NUMA_NO_NODE,
  * prefer the current CPU's closest node. Otherwise node must be valid and
@@ -564,6 +570,11 @@ static inline struct page *alloc_pages(gfp_t gfp_mask, unsigned int order)
 #define alloc_page(gfp_mask) alloc_pages(gfp_mask, 0)
 #define alloc_page_vma(gfp_mask, vma, addr)			\
 	alloc_pages_vma(gfp_mask, 0, vma, addr, numa_node_id(), false)
+
+static inline struct folio *alloc_folio(gfp_t gfp, unsigned int order)
+{
+	return (struct folio *)alloc_pages(gfp | __GFP_COMP, order);
+}
 
 extern unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order);
 extern unsigned long get_zeroed_page(gfp_t gfp_mask);
