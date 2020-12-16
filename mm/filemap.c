@@ -3172,32 +3172,20 @@ EXPORT_SYMBOL(filemap_page_mkwrite);
 EXPORT_SYMBOL(generic_file_mmap);
 EXPORT_SYMBOL(generic_file_readonly_mmap);
 
-static struct page *wait_on_page_read(struct page *page)
-{
-	if (!IS_ERR(page)) {
-		wait_on_page_locked(page);
-		if (!PageUptodate(page)) {
-			put_page(page);
-			page = ERR_PTR(-EIO);
-		}
-	}
-	return page;
-}
-
-static struct page *do_read_cache_page(struct address_space *mapping,
+static struct folio *do_read_cache_folio(struct address_space *mapping,
 		pgoff_t index, filler_t filler, void *data, gfp_t gfp)
 {
-	struct page *page;
+	struct folio *folio;
 	int err;
 repeat:
-	page = find_get_page(mapping, index);
-	if (!page) {
-		page = &__page_cache_alloc(gfp, 0)->page;
-		if (!page)
+	folio = find_get_folio(mapping, index);
+	if (!folio) {
+		folio = __page_cache_alloc(gfp, 0);
+		if (!folio)
 			return ERR_PTR(-ENOMEM);
-		err = add_to_page_cache_lru(page, mapping, index, gfp);
+		err = folio_add_to_page_cache(folio, mapping, index, gfp);
 		if (unlikely(err)) {
-			put_page(page);
+			put_folio(folio);
 			if (err == -EEXIST)
 				goto repeat;
 			/* Presumably ENOMEM for xarray node */
@@ -3206,21 +3194,24 @@ repeat:
 
 filler:
 		if (filler)
-			err = filler(data, page_folio(page));
+			err = filler(data, folio);
 		else
-			err = mapping->a_ops->readpage(data, page_folio(page));
+			err = mapping->a_ops->readpage(data, folio);
 
 		if (err < 0) {
-			put_page(page);
+			put_folio(folio);
 			return ERR_PTR(err);
 		}
 
-		page = wait_on_page_read(page);
-		if (IS_ERR(page))
-			return page;
+		wait_on_folio_locked(folio);
+		if (!FolioUptodate(folio)) {
+			put_folio(folio);
+			return ERR_PTR(-EIO);
+		}
+
 		goto out;
 	}
-	if (PageUptodate(page))
+	if (FolioUptodate(folio))
 		goto out;
 
 	/*
@@ -3254,23 +3245,23 @@ filler:
 	 * avoid spurious serialisations and wakeups when multiple processes
 	 * wait on the same page for IO to complete.
 	 */
-	wait_on_page_locked(page);
-	if (PageUptodate(page))
+	wait_on_folio_locked(folio);
+	if (FolioUptodate(folio))
 		goto out;
 
 	/* Distinguish between all the cases under the safety of the lock */
-	lock_page(page);
+	lock_folio(folio);
 
 	/* Case c or d, restart the operation */
-	if (!page->mapping) {
-		unlock_page(page);
-		put_page(page);
+	if (!folio->page.mapping) {
+		unlock_folio(folio);
+		put_folio(folio);
 		goto repeat;
 	}
 
 	/* Someone else locked and filled the page in a very small window */
-	if (PageUptodate(page)) {
-		unlock_page(page);
+	if (FolioUptodate(folio)) {
+		unlock_folio(folio);
 		goto out;
 	}
 
@@ -3280,16 +3271,16 @@ filler:
 	 * Clear page error before actual read, PG_error will be
 	 * set again if read page fails.
 	 */
-	ClearPageError(page);
+	ClearFolioError(folio);
 	goto filler;
 
 out:
-	mark_page_accessed(page);
-	return page;
+	mark_folio_accessed(folio);
+	return folio;
 }
 
 /**
- * read_cache_page - read into page cache, fill it if needed
+ * read_cache_folio - read into page cache, fill it if needed
  * @mapping:	the page's address_space
  * @index:	the page index
  * @filler:	function to perform the read
@@ -3302,13 +3293,13 @@ out:
  *
  * Return: up to date page on success, ERR_PTR() on failure.
  */
-struct page *read_cache_page(struct address_space *mapping, pgoff_t index,
+struct folio *read_cache_folio(struct address_space *mapping, pgoff_t index,
 		filler_t filler, void *data)
 {
-	return do_read_cache_page(mapping, index, filler, data,
+	return do_read_cache_folio(mapping, index, filler, data,
 			mapping_gfp_mask(mapping));
 }
-EXPORT_SYMBOL(read_cache_page);
+EXPORT_SYMBOL(read_cache_folio);
 
 /**
  * read_cache_page_gfp - read into page cache, using specified page allocation flags.
@@ -3327,7 +3318,11 @@ struct page *read_cache_page_gfp(struct address_space *mapping,
 				pgoff_t index,
 				gfp_t gfp)
 {
-	return do_read_cache_page(mapping, index, NULL, NULL, gfp);
+	struct folio *folio = do_read_cache_folio(mapping, index, NULL, NULL,
+									gfp);
+	if (IS_ERR(folio))
+		return &folio->page;
+	return folio_page(folio, index);
 }
 EXPORT_SYMBOL(read_cache_page_gfp);
 
