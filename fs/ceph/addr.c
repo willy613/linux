@@ -1760,7 +1760,7 @@ int ceph_uninline_data(struct file *filp, struct page *locked_page)
 		if (len > PAGE_SIZE)
 			len = PAGE_SIZE;
 	} else {
-		page = __page_cache_alloc(GFP_NOFS);
+		page = &__page_cache_alloc(GFP_NOFS, 0)->page;
 		if (!page) {
 			err = -ENOMEM;
 			goto out;

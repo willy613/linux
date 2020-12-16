@@ -1587,7 +1587,7 @@ again:
 		struct page *page = NULL;
 		loff_t i_size;
 		if (retry_op == READ_INLINE) {
-			page = __page_cache_alloc(GFP_KERNEL);
+			page = &__page_cache_alloc(GFP_KERNEL, 0)->page;
 			if (!page)
 				return -ENOMEM;
 		}

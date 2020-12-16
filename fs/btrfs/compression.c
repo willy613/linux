@@ -532,8 +532,8 @@ static noinline int add_ra_bio_pages(struct inode *inode,
 			goto next;
 		}
 
-		page = __page_cache_alloc(mapping_gfp_constraint(mapping,
-								 ~__GFP_FS));
+		page = &__page_cache_alloc(mapping_gfp_constraint(mapping,
+						 ~__GFP_FS), 0)->page;
 		if (!page)
 			break;
 
