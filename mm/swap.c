@@ -702,14 +702,16 @@ void deactivate_page(struct page *page)
  */
 void mark_page_lazyfree(struct page *page)
 {
-	if (PageLRU(page) && PageAnon(page) && PageSwapBacked(page) &&
-	    !PageSwapCache(page) && !PageUnevictable(page)) {
+	struct folio *folio = page_folio(page);
+
+	if (FolioLRU(folio) && FolioAnon(folio) && FolioSwapBacked(folio) &&
+	    !FolioSwapCache(folio) && !FolioUnevictable(folio)) {
 		struct pagevec *pvec;
 
 		local_lock(&lru_pvecs.lock);
 		pvec = this_cpu_ptr(&lru_pvecs.lru_lazyfree);
-		get_page(page);
-		if (!pagevec_add(pvec, page) || PageCompound(page))
+		get_folio(folio);
+		if (!pagevec_add(pvec, &folio->page) || FolioMulti(folio))
 			pagevec_lru_move_fn(pvec, lru_lazyfree_fn);
 		local_unlock(&lru_pvecs.lock);
 	}
