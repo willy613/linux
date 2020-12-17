@@ -450,15 +450,16 @@ EXPORT_SYMBOL(mark_folio_accessed);
  */
 void lru_cache_add(struct page *page)
 {
+	struct folio *folio = page_folio(page);
 	struct pagevec *pvec;
 
-	VM_BUG_ON_PAGE(PageActive(page) && PageUnevictable(page), page);
-	VM_BUG_ON_PAGE(PageLRU(page), page);
+	VM_BUG_ON_PAGE(FolioActive(folio) && FolioUnevictable(folio), &folio->page);
+	VM_BUG_ON_PAGE(FolioLRU(folio), &folio->page);
 
-	get_page(page);
+	get_folio(folio);
 	local_lock(&lru_pvecs.lock);
 	pvec = this_cpu_ptr(&lru_pvecs.lru_add);
-	if (!pagevec_add(pvec, page) || PageCompound(page))
+	if (!pagevec_add(pvec, &folio->page) || FolioMulti(folio))
 		__pagevec_lru_add(pvec);
 	local_unlock(&lru_pvecs.lock);
 }
