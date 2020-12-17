@@ -679,13 +679,15 @@ void deactivate_file_page(struct page *page)
  */
 void deactivate_page(struct page *page)
 {
-	if (PageLRU(page) && PageActive(page) && !PageUnevictable(page)) {
+	struct folio *folio = page_folio(page);
+
+	if (FolioLRU(folio) && FolioActive(folio) && !FolioUnevictable(folio)) {
 		struct pagevec *pvec;
 
 		local_lock(&lru_pvecs.lock);
 		pvec = this_cpu_ptr(&lru_pvecs.lru_deactivate);
-		get_page(page);
-		if (!pagevec_add(pvec, page) || PageCompound(page))
+		get_folio(folio);
+		if (!pagevec_add(pvec, &folio->page) || FolioMulti(folio))
 			pagevec_lru_move_fn(pvec, lru_deactivate_fn);
 		local_unlock(&lru_pvecs.lock);
 	}
