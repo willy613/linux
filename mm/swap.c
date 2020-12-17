@@ -337,16 +337,16 @@ static bool need_activate_page_drain(int cpu)
 	return pagevec_count(&per_cpu(lru_pvecs.activate_page, cpu)) != 0;
 }
 
-static void activate_page(struct page *page)
+static void activate_folio(struct folio *folio)
 {
-	page = compound_head(page);
-	if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
+	if (FolioLRU(folio) && !FolioActive(folio) &&
+	    !FolioUnevictable(folio)) {
 		struct pagevec *pvec;
 
 		local_lock(&lru_pvecs.lock);
 		pvec = this_cpu_ptr(&lru_pvecs.activate_page);
-		get_page(page);
-		if (!pagevec_add(pvec, page) || PageCompound(page))
+		get_folio(folio);
+		if (!pagevec_add(pvec, &folio->page) || FolioMulti(folio))
 			pagevec_lru_move_fn(pvec, __activate_page);
 		local_unlock(&lru_pvecs.lock);
 	}
@@ -357,16 +357,15 @@ static inline void activate_page_drain(int cpu)
 {
 }
 
-static void activate_page(struct page *page)
+static void activate_folio(struct folio *folio)
 {
 	struct lruvec *lruvec;
 
-	page = compound_head(page);
-	if (TestClearPageLRU(page)) {
-		lruvec = lock_page_lruvec_irq(page);
-		__activate_page(page, lruvec);
+	if (TestClearFolioLRU(folio)) {
+		lruvec = lock_page_lruvec_irq(&folio->page);
+		__activate_page(&folio->page, lruvec);
 		unlock_page_lruvec_irq(lruvec);
-		SetPageLRU(page);
+		SetFolioLRU(folio);
 	}
 }
 #endif
@@ -429,7 +428,7 @@ void mark_folio_accessed(struct folio *folio)
 		 * LRU on the next drain.
 		 */
 		if (FolioLRU(folio))
-			activate_page(&folio->page);
+			activate_folio(folio);
 		else
 			__lru_cache_activate_page(&folio->page);
 		ClearFolioReferenced(folio);
