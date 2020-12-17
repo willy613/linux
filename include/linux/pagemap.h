@@ -155,6 +155,7 @@ static inline void filemap_nr_thps_dec(struct address_space *mapping)
 #endif
 }
 
+void release_folios(struct folio **folios, int nr);
 void release_pages(struct page **pages, int nr);
 
 /*
