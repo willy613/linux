@@ -649,20 +649,21 @@ void lru_add_drain_cpu(int cpu)
  */
 void deactivate_file_page(struct page *page)
 {
+	struct folio *folio = page_folio(page);
 	/*
 	 * In a workload with many unevictable page such as mprotect,
 	 * unevictable page deactivation for accelerating reclaim is pointless.
 	 */
-	if (PageUnevictable(page))
+	if (FolioUnevictable(folio))
 		return;
 
-	if (likely(get_page_unless_zero(page))) {
+	if (likely(get_page_unless_zero(&folio->page))) {
 		struct pagevec *pvec;
 
 		local_lock(&lru_pvecs.lock);
 		pvec = this_cpu_ptr(&lru_pvecs.lru_deactivate_file);
 
-		if (!pagevec_add(pvec, page) || PageCompound(page))
+		if (!pagevec_add(pvec, &folio->page) || FolioMulti(folio))
 			pagevec_lru_move_fn(pvec, lru_deactivate_file_fn);
 		local_unlock(&lru_pvecs.lock);
 	}
