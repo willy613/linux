@@ -1206,15 +1206,6 @@ void kfree_link(void *p)
 EXPORT_SYMBOL(kfree_link);
 
 /*
- * nop .set_page_dirty method so that people can use .page_mkwrite on
- * anon inodes.
- */
-static int anon_set_page_dirty(struct page *page)
-{
-	return 0;
-};
-
-/*
  * A single inode exists for all anon_inode files. Contrary to pipes,
  * anon_inode inodes have no associated per-instance data, so we need
  * only allocate one of them.
@@ -1222,7 +1213,7 @@ static int anon_set_page_dirty(struct page *page)
 struct inode *alloc_anon_inode(struct super_block *s)
 {
 	static const struct address_space_operations anon_aops = {
-		.set_page_dirty = anon_set_page_dirty,
+		.set_page_dirty = noop_set_page_dirty,
 	};
 	struct inode *inode = new_inode_pseudo(s);
 
