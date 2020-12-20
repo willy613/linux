@@ -72,22 +72,19 @@ static inline struct ceph_snap_context *page_snap_context(struct page *page)
  * Dirty a page.  Optimistically adjust accounting, on the assumption
  * that we won't race with invalidate.  If we do, readjust.
  */
-static int ceph_set_page_dirty(struct page *page)
+static bool ceph_set_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
-	struct address_space *mapping = page->mapping;
 	struct inode *inode;
 	struct ceph_inode_info *ci;
 	struct ceph_snap_context *snapc;
 	int ret;
 
-	if (unlikely(!mapping))
-		return !TestSetPageDirty(page);
-
-	if (PageDirty(page)) {
+	if (FolioDirty(folio)) {
 		dout("%p set_page_dirty %p idx %lu -- already dirty\n",
-		     mapping->host, page, page->index);
-		BUG_ON(!PagePrivate(page));
-		return 0;
+		     mapping->host, folio, folio->page.index);
+		BUG_ON(!FolioPrivate(folio));
+		return false;
 	}
 
 	inode = mapping->host;
@@ -113,7 +110,7 @@ static int ceph_set_page_dirty(struct page *page)
 	++ci->i_wrbuffer_ref;
 	dout("%p set_page_dirty %p idx %lu head %d/%d -> %d/%d "
 	     "snapc %p seq %lld (%d snaps)\n",
-	     mapping->host, page, page->index,
+	     mapping->host, folio, folio->page.index,
 	     ci->i_wrbuffer_ref-1, ci->i_wrbuffer_ref_head-1,
 	     ci->i_wrbuffer_ref, ci->i_wrbuffer_ref_head,
 	     snapc, snapc->seq, snapc->num_snaps);
@@ -123,13 +120,11 @@ static int ceph_set_page_dirty(struct page *page)
 	 * Reference snap context in page->private.  Also set
 	 * PagePrivate so that we get invalidatepage callback.
 	 */
-	BUG_ON(PagePrivate(page));
-	page->private = (unsigned long)snapc;
-	SetPagePrivate(page);
+	BUG_ON(FolioPrivate(folio));
+	folio->page.private = (unsigned long)snapc;
+	SetFolioPrivate(folio);
 
-	ret = __set_page_dirty_nobuffers(page);
-	WARN_ON(!PageLocked(page));
-	WARN_ON(!page->mapping);
+	ret = __set_page_dirty_nobuffers(mapping, folio);
 
 	return ret;
 }

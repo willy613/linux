@@ -924,19 +924,20 @@ static void btree_invalidatepage(struct page *page, unsigned int offset,
 	}
 }
 
-static int btree_set_page_dirty(struct page *page)
+static bool btree_set_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
 #ifdef DEBUG
 	struct extent_buffer *eb;
 
-	BUG_ON(!PagePrivate(page));
-	eb = (struct extent_buffer *)page->private;
+	BUG_ON(!FolioPrivate(folio));
+	eb = (struct extent_buffer *)folio->page.private;
 	BUG_ON(!eb);
 	BUG_ON(!test_bit(EXTENT_BUFFER_DIRTY, &eb->bflags));
 	BUG_ON(!atomic_read(&eb->refs));
 	btrfs_assert_tree_locked(eb);
 #endif
-	return __set_page_dirty_nobuffers(page);
+	return __set_page_dirty_nobuffers(mapping, folio);
 }
 
 static const struct address_space_operations btree_aops = {

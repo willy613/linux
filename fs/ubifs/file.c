@@ -572,7 +572,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 	if (!PagePrivate(page)) {
 		SetPagePrivate(page);
 		atomic_long_inc(&c->dirty_pg_cnt);
-		__set_page_dirty_nobuffers(page);
+		__set_page_dirty_nobuffers(mapping, page_folio(page));
 	}
 
 	if (appending) {
@@ -1444,13 +1444,14 @@ static ssize_t ubifs_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	return generic_file_write_iter(iocb, from);
 }
 
-static int ubifs_set_page_dirty(struct page *page)
+static bool ubifs_set_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
-	int ret;
-	struct inode *inode = page->mapping->host;
+	bool ret;
+	struct inode *inode = mapping->host;
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 
-	ret = __set_page_dirty_nobuffers(page);
+	ret = __set_page_dirty_nobuffers(mapping, folio);
 	/*
 	 * An attempt to dirty a page without budgeting for it - should not
 	 * happen.
@@ -1568,7 +1569,7 @@ static vm_fault_t ubifs_vm_page_mkwrite(struct vm_fault *vmf)
 			ubifs_convert_page_budget(c);
 		SetPagePrivate(page);
 		atomic_long_inc(&c->dirty_pg_cnt);
-		__set_page_dirty_nobuffers(page);
+		__set_page_dirty_nobuffers(inode->i_mapping, page_folio(page));
 	}
 
 	if (update_time) {

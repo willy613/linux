@@ -434,6 +434,11 @@ static inline pgoff_t folio_index(struct folio *folio)
         return folio->page.index;
 }
 
+static inline pgoff_t folio_next_index(struct folio *folio)
+{
+	return folio->page.index + folio_nr_pages(folio);
+}
+
 static inline struct page *folio_page(struct folio *folio, pgoff_t index)
 {
 	index -= folio_index(folio);

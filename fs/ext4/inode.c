@@ -3626,17 +3626,19 @@ const struct iomap_ops ext4_iomap_report_ops = {
  * So what we do is to mark the page "pending dirty" and next time writepage
  * is called, propagate that into the buffers appropriately.
  */
-static int ext4_journalled_set_page_dirty(struct page *page)
+static bool ext4_journalled_set_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
-	SetPageChecked(page);
-	return __set_page_dirty_nobuffers(page);
+	SetFolioChecked(folio);
+	return __set_page_dirty_nobuffers(mapping, folio);
 }
 
-static int ext4_set_page_dirty(struct page *page)
+static bool ext4_set_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
-	WARN_ON_ONCE(!PageLocked(page) && !PageDirty(page));
-	WARN_ON_ONCE(!page_has_buffers(page));
-	return __set_page_dirty_buffers(page);
+	WARN_ON_ONCE(!FolioLocked(folio) && !FolioDirty(folio));
+	WARN_ON_ONCE(!page_has_buffers(&folio->page));
+	return __set_page_dirty_buffers(mapping, folio);
 }
 
 static int ext4_iomap_swap_activate(struct swap_info_struct *sis,

@@ -597,16 +597,16 @@ EXPORT_SYMBOL(mark_buffer_dirty_inode);
  *
  * The caller must hold lock_page_memcg().
  */
-void __set_page_dirty(struct page *page, struct address_space *mapping,
+void __set_page_dirty(struct folio *folio, struct address_space *mapping,
 			     int warn)
 {
 	unsigned long flags;
 
 	xa_lock_irqsave(&mapping->i_pages, flags);
-	if (page->mapping) {	/* Race with truncate? */
-		WARN_ON_ONCE(warn && !PageUptodate(page));
-		account_page_dirtied(page, mapping);
-		__xa_set_mark(&mapping->i_pages, page_index(page),
+	if (folio->page.mapping) {	/* Race with truncate? */
+		WARN_ON_ONCE(warn && !FolioUptodate(folio));
+		account_page_dirtied(folio, mapping);
+		__xa_set_mark(&mapping->i_pages, folio_index(folio),
 				PAGECACHE_TAG_DIRTY);
 	}
 	xa_unlock_irqrestore(&mapping->i_pages, flags);
@@ -638,17 +638,14 @@ EXPORT_SYMBOL_GPL(__set_page_dirty);
  * FIXME: may need to call ->reservepage here as well.  That's rather up to the
  * address_space though.
  */
-int __set_page_dirty_buffers(struct page *page)
+bool __set_page_dirty_buffers(struct address_space *mapping,
+		struct folio *folio)
 {
 	int newly_dirty;
-	struct address_space *mapping = page_mapping(page);
-
-	if (unlikely(!mapping))
-		return !TestSetPageDirty(page);
 
 	spin_lock(&mapping->private_lock);
-	if (page_has_buffers(page)) {
-		struct buffer_head *head = page_buffers(page);
+	if (page_has_buffers(&folio->page)) {
+		struct buffer_head *head = page_buffers(&folio->page);
 		struct buffer_head *bh = head;
 
 		do {
@@ -660,14 +657,14 @@ int __set_page_dirty_buffers(struct page *page)
 	 * Lock out page's memcg migration to keep PageDirty
 	 * synchronized with per-memcg dirty page counters.
 	 */
-	lock_page_memcg(page);
-	newly_dirty = !TestSetPageDirty(page);
+	lock_page_memcg(&folio->page);
+	newly_dirty = !TestSetFolioDirty(folio);
 	spin_unlock(&mapping->private_lock);
 
 	if (newly_dirty)
-		__set_page_dirty(page, mapping, 1);
+		__set_page_dirty(folio, mapping, 1);
 
-	unlock_page_memcg(page);
+	unlock_page_memcg(&folio->page);
 
 	if (newly_dirty)
 		__mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
@@ -1164,16 +1161,16 @@ void mark_buffer_dirty(struct buffer_head *bh)
 	}
 
 	if (!test_set_buffer_dirty(bh)) {
-		struct page *page = bh->b_page;
+		struct folio *folio = page_folio(bh->b_page);
 		struct address_space *mapping = NULL;
 
-		lock_page_memcg(page);
-		if (!TestSetPageDirty(page)) {
-			mapping = page_mapping(page);
+		lock_page_memcg(&folio->page);
+		if (!TestSetFolioDirty(folio)) {
+			mapping = folio_mapping(folio);
 			if (mapping)
-				__set_page_dirty(page, mapping, 0);
+				__set_page_dirty(folio, mapping, 0);
 		}
-		unlock_page_memcg(page);
+		unlock_page_memcg(&folio->page);
 		if (mapping)
 			__mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
 	}

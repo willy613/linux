@@ -396,7 +396,7 @@ __bread(struct block_device *bdev, sector_t block, unsigned size)
 	return __bread_gfp(bdev, block, size, __GFP_MOVABLE);
 }
 
-extern int __set_page_dirty_buffers(struct page *page);
+bool __set_page_dirty_buffers(struct address_space *, struct folio *);
 
 #else /* CONFIG_BLOCK */
 

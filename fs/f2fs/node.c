@@ -2075,24 +2075,25 @@ skip_write:
 	return 0;
 }
 
-static int f2fs_set_node_page_dirty(struct page *page)
+static bool f2fs_set_node_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
-	trace_f2fs_set_page_dirty(page, NODE);
+	trace_f2fs_set_page_dirty(&folio->page, NODE);
 
-	if (!PageUptodate(page))
-		SetPageUptodate(page);
+	if (!FolioUptodate(folio))
+		SetFolioUptodate(folio);
 #ifdef CONFIG_F2FS_CHECK_FS
-	if (IS_INODE(page))
-		f2fs_inode_chksum_set(F2FS_P_SB(page), page);
+	if (IS_INODE(&folio->page))
+		f2fs_inode_chksum_set(F2FS_M_SB(mapping), &folio->page);
 #endif
-	if (!PageDirty(page)) {
-		__set_page_dirty_nobuffers(page);
-		inc_page_count(F2FS_P_SB(page), F2FS_DIRTY_NODES);
-		f2fs_set_page_private(page, 0);
-		f2fs_trace_pid(page);
-		return 1;
+	if (!FolioDirty(folio)) {
+		__set_page_dirty_nobuffers(mapping, folio);
+		inc_page_count(F2FS_M_SB(mapping), F2FS_DIRTY_NODES);
+		f2fs_set_page_private(&folio->page, 0);
+		f2fs_trace_pid(&folio->page);
+		return true;
 	}
-	return 0;
+	return false;
 }
 
 /*

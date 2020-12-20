@@ -622,11 +622,12 @@ out:
  * Returns: 1 if it dirtyed the page, or 0 otherwise
  */
  
-static int jdata_set_page_dirty(struct page *page)
+static bool jdata_set_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
 	if (current->journal_info)
-		SetPageChecked(page);
-	return __set_page_dirty_buffers(page);
+		SetFolioChecked(folio);
+	return __set_page_dirty_buffers(mapping, folio);
 }
 
 /**

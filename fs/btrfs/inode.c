@@ -778,7 +778,8 @@ cleanup_and_bail_uncompressed:
 	if (async_chunk->locked_page &&
 	    (page_offset(async_chunk->locked_page) >= start &&
 	     page_offset(async_chunk->locked_page)) <= end) {
-		__set_page_dirty_nobuffers(async_chunk->locked_page);
+		__set_page_dirty_nobuffers(inode->i_mapping,
+					page_folio(async_chunk->locked_page));
 		/* unlocked later on in the async handlers */
 	}
 
@@ -9848,9 +9849,10 @@ int btrfs_prealloc_file_range_trans(struct inode *inode,
 					   min_size, actual_len, alloc_hint, trans);
 }
 
-static int btrfs_set_page_dirty(struct page *page)
+static bool btrfs_set_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
-	return __set_page_dirty_nobuffers(page);
+	return __set_page_dirty_nobuffers(mapping, folio);
 }
 
 static int btrfs_permission(struct inode *inode, int mask)

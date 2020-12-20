@@ -44,7 +44,8 @@ static int afs_dir_releasepage(struct page *page, gfp_t gfp_flags);
 static void afs_dir_invalidatepage(struct page *page, unsigned int offset,
 				   unsigned int length);
 
-static int afs_dir_set_page_dirty(struct page *page)
+static bool afs_dir_set_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
 	BUG(); /* This should never happen. */
 }

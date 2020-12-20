@@ -1489,7 +1489,7 @@ extern int afs_check_volume_status(struct afs_volume *, struct afs_operation *);
 /*
  * write.c
  */
-extern int afs_set_page_dirty(struct page *);
+extern bool afs_set_page_dirty(struct address_space *, struct folio *);
 extern int afs_write_begin(struct file *file, struct address_space *mapping,
 			loff_t pos, unsigned len, unsigned flags,
 			struct page **pagep, void **fsdata);

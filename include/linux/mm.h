@@ -1839,15 +1839,19 @@ extern int try_to_release_page(struct page * page, gfp_t gfp_mask);
 extern void do_invalidatepage(struct page *page, unsigned int offset,
 			      unsigned int length);
 
-void __set_page_dirty(struct page *, struct address_space *, int warn);
-int __set_page_dirty_nobuffers(struct page *page);
-int __set_page_dirty_no_writeback(struct page *page);
+void __set_page_dirty(struct folio *, struct address_space *, int warn);
+bool __set_page_dirty_nobuffers(struct address_space *, struct folio *);
+bool __set_page_dirty_no_writeback(struct address_space *, struct folio *);
 int redirty_page_for_writepage(struct writeback_control *wbc,
 				struct page *page);
-void account_page_dirtied(struct page *page, struct address_space *mapping);
+void account_page_dirtied(struct folio *folio, struct address_space *mapping);
 void account_page_cleaned(struct page *page, struct address_space *mapping,
 			  struct bdi_writeback *wb);
-int set_page_dirty(struct page *page);
+bool set_folio_dirty(struct folio *folio);
+static inline bool set_page_dirty(struct page *page)
+{
+	return set_folio_dirty(page_folio(page));
+}
 int set_page_dirty_lock(struct page *page);
 void __cancel_dirty_page(struct page *page);
 static inline void cancel_dirty_page(struct page *page)

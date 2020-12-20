@@ -433,20 +433,21 @@ stop:
 	return nwritten;
 }
 
-static int f2fs_set_meta_page_dirty(struct page *page)
+static bool f2fs_set_meta_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
-	trace_f2fs_set_page_dirty(page, META);
+	trace_f2fs_set_page_dirty(&folio->page, META);
 
-	if (!PageUptodate(page))
-		SetPageUptodate(page);
-	if (!PageDirty(page)) {
-		__set_page_dirty_nobuffers(page);
-		inc_page_count(F2FS_P_SB(page), F2FS_DIRTY_META);
-		f2fs_set_page_private(page, 0);
-		f2fs_trace_pid(page);
-		return 1;
+	if (!FolioUptodate(folio))
+		SetFolioUptodate(folio);
+	if (!FolioDirty(folio)) {
+		__set_page_dirty_nobuffers(mapping, folio);
+		inc_page_count(F2FS_M_SB(mapping), F2FS_DIRTY_META);
+		f2fs_set_page_private(&folio->page, 0);
+		f2fs_trace_pid(&folio->page);
+		return true;
 	}
-	return 0;
+	return false;
 }
 
 const struct address_space_operations f2fs_meta_aops = {

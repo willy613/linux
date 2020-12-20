@@ -1159,7 +1159,7 @@ int noop_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 }
 EXPORT_SYMBOL(noop_fsync);
 
-int noop_set_page_dirty(struct page *page)
+bool noop_set_page_dirty(struct address_space *mapping, struct folio *folio)
 {
 	/*
 	 * Unlike __set_page_dirty_no_writeback that handles dirty page

@@ -3681,35 +3681,36 @@ int f2fs_release_page(struct page *page, gfp_t wait)
 	return 1;
 }
 
-static int f2fs_set_data_page_dirty(struct page *page)
+static bool f2fs_set_data_page_dirty(struct address_space *mapping,
+		struct folio *folio)
 {
-	struct inode *inode = page_file_mapping(page)->host;
+	struct inode *inode = mapping->host;
 
-	trace_f2fs_set_page_dirty(page, DATA);
+	trace_f2fs_set_page_dirty(&folio->page, DATA);
 
-	if (!PageUptodate(page))
-		SetPageUptodate(page);
-	if (PageSwapCache(page))
-		return __set_page_dirty_nobuffers(page);
+	if (!FolioUptodate(folio))
+		SetFolioUptodate(folio);
+	if (FolioSwapCache(folio))
+		return __set_page_dirty_nobuffers(mapping, folio);
 
 	if (f2fs_is_atomic_file(inode) && !f2fs_is_commit_atomic_write(inode)) {
-		if (!IS_ATOMIC_WRITTEN_PAGE(page)) {
-			f2fs_register_inmem_page(inode, page);
-			return 1;
+		if (!IS_ATOMIC_WRITTEN_PAGE(&folio->page)) {
+			f2fs_register_inmem_page(inode, &folio->page);
+			return true;
 		}
 		/*
 		 * Previously, this page has been registered, we just
 		 * return here.
 		 */
-		return 0;
+		return false;
 	}
 
-	if (!PageDirty(page)) {
-		__set_page_dirty_nobuffers(page);
-		f2fs_update_dirty_page(inode, page);
-		return 1;
+	if (!FolioDirty(folio)) {
+		__set_page_dirty_nobuffers(mapping, folio);
+		f2fs_update_dirty_page(inode, &folio->page);
+		return true;
 	}
-	return 0;
+	return false;
 }
 
 

@@ -371,8 +371,8 @@ struct address_space_operations {
 	/* Write back some dirty pages from this mapping. */
 	int (*writepages)(struct address_space *, struct writeback_control *);
 
-	/* Set a page dirty.  Return true if this dirtied it */
-	int (*set_page_dirty)(struct page *page);
+	/* Set a folio dirty.  Return true if this dirtied it */
+	bool (*set_page_dirty)(struct address_space *, struct folio *);
 
 	/*
 	 * Reads in the requested pages. Unlike ->readpage(), this is
@@ -3152,7 +3152,7 @@ extern int simple_rename(struct inode *, struct dentry *,
 extern void simple_recursive_removal(struct dentry *,
                               void (*callback)(struct dentry *));
 extern int noop_fsync(struct file *, loff_t, loff_t, int);
-extern int noop_set_page_dirty(struct page *page);
+bool noop_set_page_dirty(struct address_space *, struct folio *);
 extern void noop_invalidatepage(struct page *page, unsigned int offset,
 		unsigned int length);
 extern ssize_t noop_direct_IO(struct kiocb *iocb, struct iov_iter *iter);

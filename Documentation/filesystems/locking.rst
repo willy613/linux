@@ -238,7 +238,7 @@ prototypes::
 	int (*writepage)(struct page *page, struct writeback_control *wbc);
 	int (*readpage)(struct file *, struct folio *);
 	int (*writepages)(struct address_space *, struct writeback_control *);
-	int (*set_page_dirty)(struct page *page);
+	bool (*set_page_dirty)(struct address_space *, struct folio *folio);
 	void (*readahead)(struct readahead_control *);
 	int (*readpages)(struct file *filp, struct address_space *mapping,
 			struct list_head *pages, unsigned nr_pages);

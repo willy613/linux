@@ -1500,15 +1500,14 @@ void extent_range_redirty_for_io(struct inode *inode, u64 start, u64 end)
 {
 	unsigned long index = start >> PAGE_SHIFT;
 	unsigned long end_index = end >> PAGE_SHIFT;
-	struct page *page;
 
 	while (index <= end_index) {
-		page = find_get_page(inode->i_mapping, index);
-		BUG_ON(!page); /* Pages should be in the extent_io_tree */
-		__set_page_dirty_nobuffers(page);
-		account_page_redirty(page);
-		put_page(page);
-		index++;
+		struct folio *folio = find_get_folio(inode->i_mapping, index);
+		BUG_ON(!folio); /* Pages should be in the extent_io_tree */
+		__set_page_dirty_nobuffers(inode->i_mapping, folio);
+		account_page_redirty(&folio->page);
+		put_folio(folio);
+		index = folio_next_index(folio);
 	}
 }
 

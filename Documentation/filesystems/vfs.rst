@@ -705,7 +705,7 @@ cache in your filesystem.  The following members are defined:
 		int (*writepage)(struct page *page, struct writeback_control *wbc);
 		int (*readpage)(struct file *, struct folio *);
 		int (*writepages)(struct address_space *, struct writeback_control *);
-		int (*set_page_dirty)(struct page *page);
+		bool (*set_page_dirty)(struct address_space *, struct folio *);
 		void (*readahead)(struct readahead_control *);
 		int (*readpages)(struct file *filp, struct address_space *mapping,
 				 struct list_head *pages, unsigned nr_pages);
@@ -782,7 +782,7 @@ cache in your filesystem.  The following members are defined:
 	that data needs to be updated when a page is dirtied.  This is
 	called, for example, when a memory mapped page gets modified.
 	If defined, it should set the PageDirty flag, and the
-	PAGECACHE_TAG_DIRTY tag in the radix tree.
+	PAGECACHE_TAG_DIRTY tag in the xarray.
 
 ``readahead``
 	Called by the VM to read pages associated with the address_space

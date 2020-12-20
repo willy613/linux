@@ -2403,11 +2403,12 @@ EXPORT_SYMBOL(write_one_page);
 /*
  * For address_spaces which do not use buffers nor write back.
  */
-int __set_page_dirty_no_writeback(struct page *page)
+bool __set_page_dirty_no_writeback(struct address_space *mapping,
+		struct folio *folio)
 {
-	if (!PageDirty(page))
-		return !TestSetPageDirty(page);
-	return 0;
+	if (!FolioDirty(folio))
+		return !TestSetFolioDirty(folio);
+	return false;
 }
 
 /*
@@ -2417,28 +2418,28 @@ int __set_page_dirty_no_writeback(struct page *page)
  *
  * NOTE: This relies on being atomic wrt interrupts.
  */
-void account_page_dirtied(struct page *page, struct address_space *mapping)
+void account_page_dirtied(struct folio *folio, struct address_space *mapping)
 {
 	struct inode *inode = mapping->host;
 
-	trace_writeback_dirty_page(page, mapping);
+	trace_writeback_dirty_page(&folio->page, mapping);
 
 	if (mapping_can_writeback(mapping)) {
 		struct bdi_writeback *wb;
 
-		inode_attach_wb(inode, page);
+		inode_attach_wb(inode, &folio->page);
 		wb = inode_to_wb(inode);
 
-		__inc_lruvec_page_state(page, NR_FILE_DIRTY);
-		__inc_zone_page_state(page, NR_ZONE_WRITE_PENDING);
-		__inc_node_page_state(page, NR_DIRTIED);
+		__inc_lruvec_page_state(&folio->page, NR_FILE_DIRTY);
+		__inc_zone_page_state(&folio->page, NR_ZONE_WRITE_PENDING);
+		__inc_node_page_state(&folio->page, NR_DIRTIED);
 		inc_wb_stat(wb, WB_RECLAIMABLE);
 		inc_wb_stat(wb, WB_DIRTIED);
 		task_io_account_write(PAGE_SIZE);
 		current->nr_dirtied++;
 		this_cpu_inc(bdp_ratelimits);
 
-		mem_cgroup_track_foreign_dirty(page, wb);
+		mem_cgroup_track_foreign_dirty(&folio->page, wb);
 	}
 }
 
@@ -2470,27 +2471,22 @@ void account_page_cleaned(struct page *page, struct address_space *mapping,
  * hold the page lock, but e.g. zap_pte_range() calls with the page mapped and
  * the pte lock held, which also locks out truncation.
  */
-int __set_page_dirty_nobuffers(struct page *page)
+bool __set_page_dirty_nobuffers(struct address_space *mapping,
+		struct folio *folio)
 {
-	lock_page_memcg(page);
-	if (!TestSetPageDirty(page)) {
-		struct address_space *mapping = page_mapping(page);
-		if (!mapping) {
-			unlock_page_memcg(page);
-			return 1;
-		}
-
-		__set_page_dirty(page, mapping, !PagePrivate(page));
-		unlock_page_memcg(page);
+	lock_page_memcg(&folio->page);
+	if (!TestSetFolioDirty(folio)) {
+		__set_page_dirty(folio, mapping, !FolioPrivate(folio));
+		unlock_page_memcg(&folio->page);
 
 		if (mapping->host) {
 			/* !PageAnon && !swapper_space */
 			__mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
 		}
-		return 1;
+		return true;
 	}
-	unlock_page_memcg(page);
-	return 0;
+	unlock_page_memcg(&folio->page);
+	return false;
 }
 EXPORT_SYMBOL(__set_page_dirty_nobuffers);
 
@@ -2529,12 +2525,13 @@ int redirty_page_for_writepage(struct writeback_control *wbc, struct page *page)
 	int ret;
 
 	wbc->pages_skipped++;
-	ret = __set_page_dirty_nobuffers(page);
+	ret = __set_page_dirty_nobuffers(page->mapping, page_folio(page));
 	account_page_redirty(page);
 	return ret;
 }
 EXPORT_SYMBOL(redirty_page_for_writepage);
 
+typedef bool (*spd_t)(struct address_space *, struct folio *);
 /*
  * Dirty a page.
  *
@@ -2546,13 +2543,12 @@ EXPORT_SYMBOL(redirty_page_for_writepage);
  * If the mapping doesn't provide a set_page_dirty a_op, then
  * just fall through and assume that it wants buffer_heads.
  */
-int set_page_dirty(struct page *page)
+bool set_folio_dirty(struct folio *folio)
 {
-	struct address_space *mapping = page_mapping(page);
+	struct address_space *mapping = folio_mapping(folio);
 
-	page = compound_head(page);
 	if (likely(mapping)) {
-		int (*spd)(struct page *) = mapping->a_ops->set_page_dirty;
+		spd_t spd = mapping->a_ops->set_page_dirty;
 		/*
 		 * readahead/lru_deactivate_page could remain
 		 * PG_readahead/PG_reclaim due to race with end_page_writeback
@@ -2563,21 +2559,21 @@ int set_page_dirty(struct page *page)
 		 * it will confuse readahead and make it restart the size rampup
 		 * process. But it's a trivial problem.
 		 */
-		if (PageReclaim(page))
-			ClearPageReclaim(page);
+		if (FolioReclaim(folio))
+			ClearFolioReclaim(folio);
 #ifdef CONFIG_BLOCK
 		if (!spd)
 			spd = __set_page_dirty_buffers;
 #endif
-		return (*spd)(page);
+		return spd(mapping, folio);
 	}
-	if (!PageDirty(page)) {
-		if (!TestSetPageDirty(page))
-			return 1;
+	if (!FolioDirty(folio)) {
+		if (!TestSetFolioDirty(folio))
+			return true;
 	}
-	return 0;
+	return false;
 }
-EXPORT_SYMBOL(set_page_dirty);
+EXPORT_SYMBOL(set_folio_dirty);
 
 /*
  * set_page_dirty() is racy if the caller has no reference against
@@ -2591,11 +2587,12 @@ EXPORT_SYMBOL(set_page_dirty);
  */
 int set_page_dirty_lock(struct page *page)
 {
+	struct folio *folio = page_folio(page);
 	int ret;
 
-	lock_page(page);
-	ret = set_page_dirty(page);
-	unlock_page(page);
+	lock_folio(folio);
+	ret = set_folio_dirty(folio);
+	unlock_folio(folio);
 	return ret;
 }
 EXPORT_SYMBOL(set_page_dirty_lock);
