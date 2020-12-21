@@ -79,6 +79,8 @@ static inline bool shmem_mapping(struct address_space *mapping)
 }
 #endif /* CONFIG_SHMEM */
 extern void shmem_unlock_mapping(struct address_space *mapping);
+struct folio *shmem_read_mapping_folio_gfp(struct address_space *mapping,
+					pgoff_t index, gfp_t gfp_mask);
 extern struct page *shmem_read_mapping_page_gfp(struct address_space *mapping,
 					pgoff_t index, gfp_t gfp_mask);
 extern void shmem_truncate_range(struct inode *inode, loff_t start, loff_t end);
@@ -107,6 +109,13 @@ static inline struct page *shmem_read_mapping_page(
 				struct address_space *mapping, pgoff_t index)
 {
 	return shmem_read_mapping_page_gfp(mapping, index,
+					mapping_gfp_mask(mapping));
+}
+
+static inline struct folio *shmem_read_mapping_folio(
+				struct address_space *mapping, pgoff_t index)
+{
+	return shmem_read_mapping_folio_gfp(mapping, index,
 					mapping_gfp_mask(mapping));
 }
 

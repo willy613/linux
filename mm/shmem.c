@@ -4238,6 +4238,31 @@ int shmem_zero_setup(struct vm_area_struct *vma)
  * i915_gem_object_get_pages_gtt() mixes __GFP_NORETRY | __GFP_NOWARN in
  * with the mapping_gfp_mask(), to avoid OOMing the machine unnecessarily.
  */
+struct folio *shmem_read_mapping_folio_gfp(struct address_space *mapping,
+					 pgoff_t index, gfp_t gfp)
+{
+#ifdef CONFIG_SHMEM
+	struct inode *inode = mapping->host;
+	struct folio *folio;
+	int error;
+
+	BUG_ON(!shmem_mapping(mapping));
+	error = shmem_getfolio_gfp(inode, index, &folio, SGP_CACHE,
+				  gfp, NULL, NULL, NULL);
+	if (error)
+		folio = ERR_PTR(error);
+	else
+		unlock_folio(folio);
+	return folio;
+#else
+	/*
+	 * The tiny !SHMEM case uses ramfs without swap
+	 */
+	return do_read_cache_folio(mapping, index, NULL, NULL, gfp);
+#endif
+}
+EXPORT_SYMBOL_GPL(shmem_read_mapping_folio_gfp);
+
 struct page *shmem_read_mapping_page_gfp(struct address_space *mapping,
 					 pgoff_t index, gfp_t gfp)
 {
