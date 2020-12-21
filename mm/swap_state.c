@@ -427,24 +427,23 @@ struct page *find_get_incore_page(struct address_space *mapping, pgoff_t index)
 {
 	swp_entry_t swp;
 	struct swap_info_struct *si;
-	struct page *page = pagecache_get_page(mapping, index,
-						FGP_ENTRY | FGP_HEAD, 0);
+	struct folio *folio = filemap_get_folio(mapping, index, FGP_ENTRY, 0);
 
-	if (!page)
-		return page;
-	if (!xa_is_value(page))
-		return find_subpage(page, index);
+	if (!folio)
+		return NULL;
+	if (!xa_is_value(folio))
+		return folio_page(folio, index);
 	if (!shmem_mapping(mapping))
 		return NULL;
 
-	swp = radix_to_swp_entry(page);
+	swp = radix_to_swp_entry(folio);
 	/* Prevent swapoff from happening to us */
 	si = get_swap_device(swp);
 	if (!si)
 		return NULL;
-	page = find_get_page(swap_address_space(swp), swp_offset(swp));
+	folio = find_get_folio(swap_address_space(swp), swp_offset(swp));
 	put_swap_device(si);
-	return page;
+	return folio_page(folio, swp_offset(swp));
 }
 
 struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
