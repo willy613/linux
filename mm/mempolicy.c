@@ -2143,7 +2143,7 @@ static struct page *alloc_page_interleave(gfp_t gfp, unsigned order,
 }
 
 /**
- * 	alloc_pages_vma	- Allocate a page for a VMA.
+ * 	alloc_folio_vma	- Allocate a folio for a VMA.
  *
  * 	@gfp:
  *      %GFP_USER    user allocation.
@@ -2165,15 +2165,16 @@ static struct page *alloc_page_interleave(gfp_t gfp, unsigned order,
  *	all allocations for pages that will be mapped into user space. Returns
  *	NULL when no page can be allocated.
  */
-struct page *
-alloc_pages_vma(gfp_t gfp, int order, struct vm_area_struct *vma,
+struct folio *
+alloc_folio_vma(gfp_t gfp, int order, struct vm_area_struct *vma,
 		unsigned long addr, int node, bool hugepage)
 {
 	struct mempolicy *pol;
-	struct page *page;
+	struct folio *folio;
 	int preferred_nid;
 	nodemask_t *nmask;
 
+	gfp |= __GFP_COMP;
 	pol = get_vma_policy(vma, addr);
 
 	if (pol->mode == MPOL_INTERLEAVE) {
@@ -2181,7 +2182,7 @@ alloc_pages_vma(gfp_t gfp, int order, struct vm_area_struct *vma,
 
 		nid = interleave_nid(pol, vma, addr, PAGE_SHIFT + order);
 		mpol_cond_put(pol);
-		page = alloc_page_interleave(gfp, order, nid);
+		folio = (struct folio *)alloc_page_interleave(gfp, order, nid);
 		goto out;
 	}
 
@@ -2208,7 +2209,7 @@ alloc_pages_vma(gfp_t gfp, int order, struct vm_area_struct *vma,
 			 * First, try to allocate THP only on local node, but
 			 * don't reclaim unnecessarily, just compact.
 			 */
-			page = __alloc_pages_node(hpage_node,
+			folio = __alloc_folio_node(hpage_node,
 				gfp | __GFP_THISNODE | __GFP_NORETRY, order);
 
 			/*
@@ -2217,8 +2218,8 @@ alloc_pages_vma(gfp_t gfp, int order, struct vm_area_struct *vma,
 			 * to prefer hugepage backing, retry allowing remote
 			 * memory with both reclaim and compact as well.
 			 */
-			if (!page && (gfp & __GFP_DIRECT_RECLAIM))
-				page = __alloc_pages_node(hpage_node,
+			if (!folio && (gfp & __GFP_DIRECT_RECLAIM))
+				folio = __alloc_folio_node(hpage_node,
 								gfp, order);
 
 			goto out;
@@ -2227,12 +2228,12 @@ alloc_pages_vma(gfp_t gfp, int order, struct vm_area_struct *vma,
 
 	nmask = policy_nodemask(gfp, pol);
 	preferred_nid = policy_node(gfp, pol, node);
-	page = __alloc_pages_nodemask(gfp, order, preferred_nid, nmask);
+	folio = __alloc_folio_nodemask(gfp, order, preferred_nid, nmask);
 	mpol_cond_put(pol);
 out:
-	return page;
+	return folio;
 }
-EXPORT_SYMBOL(alloc_pages_vma);
+EXPORT_SYMBOL(alloc_folio_vma);
 
 /**
  * 	alloc_pages_current - Allocate pages.
