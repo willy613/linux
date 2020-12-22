@@ -1800,8 +1800,6 @@ EXPORT_SYMBOL(filemap_get_folio);
  *
  * * %FGP_ACCESSED - The page will be marked accessed.
  * * %FGP_LOCK - The page is returned locked.
- * * %FGP_HEAD - If the page is present and a THP, return the head page
- *   rather than the exact page specified by the index.
  * * %FGP_ENTRY - If there is a shadow / swap / DAX entry, return it
  *   instead of allocating a new page to replace it.
  * * %FGP_CREAT - If no page is present then a new page is allocated using
@@ -1826,7 +1824,7 @@ struct page *pagecache_get_page(struct address_space *mapping, pgoff_t index,
 {
 	struct folio *folio = filemap_get_folio(mapping, index, fgp_flags, gfp);
 
-	if ((fgp_flags & FGP_HEAD) || !folio || xa_is_value(folio))
+	if (!folio || xa_is_value(folio))
 		return &folio->page;
 	return folio_page(folio, index);
 }
