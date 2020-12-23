@@ -769,6 +769,11 @@ static int vangogh_post_smu_init(struct smu_context *smu)
 	}
 }
 
+static int vangogh_mode2_reset(struct smu_context *smu)
+{
+	return smu_cmn_send_smc_msg_with_param(smu, SMU_MSG_GfxDeviceDriverReset, SMU_RESET_MODE_2, NULL);
+}
+
 static const struct pptable_funcs vangogh_ppt_funcs = {
 
 	.check_fw_status = smu_v11_0_check_fw_status,
@@ -798,6 +803,7 @@ static const struct pptable_funcs vangogh_ppt_funcs = {
 	.set_fine_grain_gfx_freq_parameters = vangogh_set_fine_grain_gfx_freq_parameters,
 	.system_features_control = vangogh_system_features_control,
 	.post_init = vangogh_post_smu_init,
+	.mode2_reset = vangogh_mode2_reset,
 };
 
 void vangogh_set_ppt_funcs(struct smu_context *smu)
