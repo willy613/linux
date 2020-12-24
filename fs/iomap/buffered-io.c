@@ -51,8 +51,9 @@ static struct bio_set iomap_ioend_bioset;
 static struct iomap_page *
 iomap_page_create(struct inode *inode, struct page *page)
 {
+	struct folio *folio = page_folio(page);
 	struct iomap_page *iop = to_iomap_page(page);
-	unsigned int nr_blocks = i_blocks_per_page(inode, page);
+	unsigned int nr_blocks = i_blocks_per_folio(inode, folio);
 
 	if (iop || nr_blocks <= 1)
 		return iop;
@@ -60,7 +61,7 @@ iomap_page_create(struct inode *inode, struct page *page)
 	iop = kzalloc(struct_size(iop, uptodate, BITS_TO_LONGS(nr_blocks)),
 			GFP_NOFS | __GFP_NOFAIL);
 	spin_lock_init(&iop->uptodate_lock);
-	if (PageUptodate(page))
+	if (FolioUptodate(folio))
 		bitmap_fill(iop->uptodate, nr_blocks);
 	attach_page_private(page, iop);
 	return iop;
@@ -69,15 +70,16 @@ iomap_page_create(struct inode *inode, struct page *page)
 static void
 iomap_page_release(struct page *page)
 {
+	struct folio *folio = page_folio(page);
 	struct iomap_page *iop = detach_page_private(page);
-	unsigned int nr_blocks = i_blocks_per_page(page->mapping->host, page);
+	unsigned int nr_blocks = i_blocks_per_folio(page->mapping->host, folio);
 
 	if (!iop)
 		return;
 	WARN_ON_ONCE(atomic_read(&iop->read_bytes_pending));
 	WARN_ON_ONCE(atomic_read(&iop->write_bytes_pending));
 	WARN_ON_ONCE(bitmap_full(iop->uptodate, nr_blocks) !=
-			PageUptodate(page));
+			FolioUptodate(folio));
 	kfree(iop);
 }
 
@@ -144,6 +146,7 @@ iomap_adjust_read_range(struct inode *inode, struct iomap_page *iop,
 static void
 iomap_iop_set_range_uptodate(struct page *page, unsigned off, unsigned len)
 {
+	struct folio *folio = page_folio(page);
 	struct iomap_page *iop = to_iomap_page(page);
 	struct inode *inode = page->mapping->host;
 	unsigned first = off >> inode->i_blkbits;
@@ -152,8 +155,8 @@ iomap_iop_set_range_uptodate(struct page *page, unsigned off, unsigned len)
 
 	spin_lock_irqsave(&iop->uptodate_lock, flags);
 	bitmap_set(iop->uptodate, first, last - first + 1);
-	if (bitmap_full(iop->uptodate, i_blocks_per_page(inode, page)))
-		SetPageUptodate(page);
+	if (bitmap_full(iop->uptodate, i_blocks_per_folio(inode, folio)))
+		SetFolioUptodate(folio);
 	spin_unlock_irqrestore(&iop->uptodate_lock, flags);
 }
 
@@ -1015,18 +1018,19 @@ static void
 iomap_finish_page_writeback(struct inode *inode, struct page *page,
 		int error, unsigned int len)
 {
+	struct folio *folio = page_folio(page);
 	struct iomap_page *iop = to_iomap_page(page);
 
 	if (error) {
-		SetPageError(page);
+		SetFolioError(folio);
 		mapping_set_error(inode->i_mapping, -EIO);
 	}
 
-	WARN_ON_ONCE(i_blocks_per_page(inode, page) > 1 && !iop);
+	WARN_ON_ONCE(i_blocks_per_folio(inode, folio) > 1 && !iop);
 	WARN_ON_ONCE(iop && atomic_read(&iop->write_bytes_pending) <= 0);
 
 	if (!iop || atomic_sub_and_test(len, &iop->write_bytes_pending))
-		end_page_writeback(page);
+		end_folio_writeback(folio);
 }
 
 /*
@@ -1312,6 +1316,7 @@ iomap_writepage_map(struct iomap_writepage_ctx *wpc,
 		struct writeback_control *wbc, struct inode *inode,
 		struct page *page, u64 end_offset)
 {
+	struct folio *folio = page_folio(page);
 	struct iomap_page *iop = to_iomap_page(page);
 	struct iomap_ioend *ioend, *next;
 	unsigned len = i_blocksize(inode);
@@ -1319,7 +1324,7 @@ iomap_writepage_map(struct iomap_writepage_ctx *wpc,
 	int error = 0, count = 0, i;
 	LIST_HEAD(submit_list);
 
-	WARN_ON_ONCE(i_blocks_per_page(inode, page) > 1 && !iop);
+	WARN_ON_ONCE(i_blocks_per_folio(inode, folio) > 1 && !iop);
 	WARN_ON_ONCE(iop && atomic_read(&iop->write_bytes_pending) != 0);
 
 	/*
@@ -1346,9 +1351,9 @@ iomap_writepage_map(struct iomap_writepage_ctx *wpc,
 	}
 
 	WARN_ON_ONCE(!wpc->ioend && !list_empty(&submit_list));
-	WARN_ON_ONCE(!PageLocked(page));
-	WARN_ON_ONCE(PageWriteback(page));
-	WARN_ON_ONCE(PageDirty(page));
+	WARN_ON_ONCE(!FolioLocked(folio));
+	WARN_ON_ONCE(FolioWriteback(folio));
+	WARN_ON_ONCE(FolioDirty(folio));
 
 	/*
 	 * We cannot cancel the ioend directly here on error.  We may have
@@ -1366,14 +1371,14 @@ iomap_writepage_map(struct iomap_writepage_ctx *wpc,
 		if (wpc->ops->discard_page)
 			wpc->ops->discard_page(page, file_offset);
 		if (!count) {
-			ClearPageUptodate(page);
-			unlock_page(page);
+			ClearFolioUptodate(folio);
+			unlock_folio(folio);
 			goto done;
 		}
 	}
 
 	set_page_writeback(page);
-	unlock_page(page);
+	unlock_folio(folio);
 
 	/*
 	 * Preserve the original error if there was one, otherwise catch

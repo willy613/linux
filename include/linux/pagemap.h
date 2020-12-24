@@ -1123,19 +1123,19 @@ static inline ssize_t folio_mkwrite_check_truncate(struct folio *folio,
 }
 
 /**
- * i_blocks_per_page - How many blocks fit in this page.
+ * i_blocks_per_folio - How many blocks fit in this folio.
  * @inode: The inode which contains the blocks.
- * @page: The page (head page if the page is a THP).
+ * @folio: The folio.
  *
- * If the block size is larger than the size of this page, return zero.
+ * If the block size is larger than the size of this folio, returns zero.
  *
- * Context: The caller should hold a refcount on the page to prevent it
+ * Context: The caller should hold a refcount on the folio to prevent it
  * from being split.
- * Return: The number of filesystem blocks covered by this page.
+ * Return: The number of filesystem blocks covered by this folio.
  */
 static inline
-unsigned int i_blocks_per_page(struct inode *inode, struct page *page)
+unsigned int i_blocks_per_folio(struct inode *inode, struct folio *folio)
 {
-	return thp_size(page) >> inode->i_blkbits;
+	return folio_size(folio) >> inode->i_blkbits;
 }
 #endif /* _LINUX_PAGEMAP_H */
