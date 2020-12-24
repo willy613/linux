@@ -727,13 +727,21 @@ static inline int wait_on_page_locked_killable(struct page *page)
 
 extern void put_and_wait_on_page_locked(struct page *page);
 
-void wait_on_page_writeback(struct page *page);
+void wait_on_folio_writeback(struct folio *folio);
+static inline void wait_on_page_writeback(struct page *page)
+{
+	return wait_on_folio_writeback(page_folio(page));
+}
 void end_folio_writeback(struct folio *folio);
 static inline void end_page_writeback(struct page *page)
 {
 	return end_folio_writeback(page_folio(page));
 }
-void wait_for_stable_page(struct page *page);
+void wait_for_stable_folio(struct folio *folio);
+static inline void wait_for_stable_page(struct page *page)
+{
+	return wait_for_stable_folio(page_folio(page));
+}
 
 void page_endio(struct page *page, bool is_write, int err);
 
