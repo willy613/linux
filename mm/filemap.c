@@ -3451,24 +3451,37 @@ out:
 EXPORT_SYMBOL(generic_file_direct_write);
 
 /*
+ * Find or create a folio at the given pagecache position. Return the locked
+ * folio once there are no pending writes.
+ */
+struct folio *filemap_get_stable_folio(struct address_space *mapping,
+					pgoff_t index, unsigned flags)
+{
+	struct folio *folio;
+	int fgp_flags = FGP_LOCK | FGP_WRITE | FGP_CREAT;
+
+	if (flags & AOP_FLAG_NOFS)
+		fgp_flags |= FGP_NOFS;
+
+	folio = filemap_get_folio(mapping, index, fgp_flags,
+			mapping_gfp_mask(mapping));
+	if (folio)
+		wait_for_stable_folio(folio);
+
+	return folio;
+}
+EXPORT_SYMBOL(filemap_get_stable_folio);
+
+/*
  * Find or create a page at the given pagecache position. Return the locked
  * page. This function is specifically for buffered writes.
  */
 struct page *grab_cache_page_write_begin(struct address_space *mapping,
 					pgoff_t index, unsigned flags)
 {
-	struct page *page;
-	int fgp_flags = FGP_LOCK|FGP_WRITE|FGP_CREAT;
+	struct folio *folio = filemap_get_stable_folio(mapping, index, flags);
 
-	if (flags & AOP_FLAG_NOFS)
-		fgp_flags |= FGP_NOFS;
-
-	page = pagecache_get_page(mapping, index, fgp_flags,
-			mapping_gfp_mask(mapping));
-	if (page)
-		wait_for_stable_page(page);
-
-	return page;
+	return folio ? folio_page(folio, index) : NULL;
 }
 EXPORT_SYMBOL(grab_cache_page_write_begin);
 
