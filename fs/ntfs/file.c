@@ -1692,8 +1692,8 @@ static size_t ntfs_copy_from_user_iter(struct page **pages, unsigned nr_pages,
 		len = PAGE_SIZE - ofs;
 		if (len > bytes)
 			len = bytes;
-		copied = iov_iter_copy_from_user_atomic(*pages, &data, ofs,
-				len);
+		copied = iov_iter_copy_from_user_atomic(page_folio(*pages),
+				&data, ofs, len);
 		total += copied;
 		bytes -= copied;
 		if (!bytes)

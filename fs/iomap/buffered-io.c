@@ -534,9 +534,8 @@ static int iomap_read_folio_sync(loff_t block_start, struct folio *folio,
 
 static int
 __iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, int flags,
-		struct page *page, struct iomap *srcmap)
+		struct folio *folio, struct iomap *srcmap)
 {
-	struct folio *folio = page_folio(page);
 	loff_t block_size = i_blocksize(inode);
 	loff_t block_start = round_down(pos, block_size);
 	loff_t block_end = round_up(pos + len, block_size);
@@ -576,12 +575,12 @@ __iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, int flags,
 	return 0;
 }
 
-static int
-iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, unsigned flags,
-		struct page **pagep, struct iomap *iomap, struct iomap *srcmap)
+static int iomap_write_begin(struct inode *inode, loff_t pos, unsigned len,
+		unsigned flags, struct folio **foliop, struct iomap *iomap,
+		struct iomap *srcmap)
 {
 	const struct iomap_page_ops *page_ops = iomap->page_ops;
-	struct page *page;
+	struct folio *folio;
 	int status = 0;
 
 	BUG_ON(pos + len > iomap->offset + iomap->length);
@@ -597,43 +596,43 @@ iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, unsigned flags,
 			return status;
 	}
 
-	page = grab_cache_page_write_begin(inode->i_mapping, pos >> PAGE_SHIFT,
+	folio = filemap_get_stable_folio(inode->i_mapping, pos >> PAGE_SHIFT,
 			AOP_FLAG_NOFS);
-	if (!page) {
+	if (!folio) {
 		status = -ENOMEM;
-		goto out_no_page;
+		goto out_no_folio;
 	}
 
 	if (srcmap->type == IOMAP_INLINE)
-		iomap_read_inline_data(inode, page_folio(page), srcmap);
+		iomap_read_inline_data(inode, folio, srcmap);
 	else if (iomap->flags & IOMAP_F_BUFFER_HEAD)
-		status = __block_write_begin_int(page, pos, len, NULL, srcmap);
+		status = __block_write_begin_int(&folio->page, pos, len, NULL,
+				srcmap);
 	else
-		status = __iomap_write_begin(inode, pos, len, flags, page,
+		status = __iomap_write_begin(inode, pos, len, flags, folio,
 				srcmap);
 
 	if (unlikely(status))
 		goto out_unlock;
 
-	*pagep = page;
+	*foliop = folio;
 	return 0;
 
 out_unlock:
-	unlock_page(page);
-	put_page(page);
+	unlock_folio(folio);
+	put_folio(folio);
 	iomap_write_failed(inode, pos, len);
 
-out_no_page:
+out_no_folio:
 	if (page_ops && page_ops->page_done)
 		page_ops->page_done(inode, pos, 0, NULL, iomap);
 	return status;
 }
 
 static size_t __iomap_write_end(struct inode *inode, loff_t pos, size_t len,
-		size_t copied, struct page *page)
+		size_t copied, struct folio *folio)
 {
-	struct folio *folio = page_folio(page);
-	flush_dcache_page(page);
+	flush_dcache_folio(folio);
 
 	/*
 	 * The blocks that were entirely written will now be uptodate, so we
@@ -672,7 +671,7 @@ static size_t iomap_write_end_inline(struct inode *inode, struct page *page,
 
 /* Returns the number of bytes copied.  May be 0.  Cannot be an errno. */
 static size_t iomap_write_end(struct inode *inode, loff_t pos, size_t len,
-		size_t copied, struct page *page, struct iomap *iomap,
+		size_t copied, struct folio *folio, struct iomap *iomap,
 		struct iomap *srcmap)
 {
 	const struct iomap_page_ops *page_ops = iomap->page_ops;
@@ -680,12 +679,13 @@ static size_t iomap_write_end(struct inode *inode, loff_t pos, size_t len,
 	size_t ret;
 
 	if (srcmap->type == IOMAP_INLINE) {
-		ret = iomap_write_end_inline(inode, page, iomap, pos, copied);
+		ret = iomap_write_end_inline(inode, &folio->page, iomap, pos,
+				copied);
 	} else if (srcmap->flags & IOMAP_F_BUFFER_HEAD) {
 		ret = block_write_end(NULL, inode->i_mapping, pos, len, copied,
-				page, NULL);
+				&folio->page, NULL);
 	} else {
-		ret = __iomap_write_end(inode, pos, len, copied, page);
+		ret = __iomap_write_end(inode, pos, len, copied, folio);
 	}
 
 	/*
@@ -697,13 +697,13 @@ static size_t iomap_write_end(struct inode *inode, loff_t pos, size_t len,
 		i_size_write(inode, pos + ret);
 		iomap->flags |= IOMAP_F_SIZE_CHANGED;
 	}
-	unlock_page(page);
+	unlock_folio(folio);
 
 	if (old_size < pos)
 		pagecache_isize_extended(inode, old_size, pos);
 	if (page_ops && page_ops->page_done)
-		page_ops->page_done(inode, pos, ret, page, iomap);
-	put_page(page);
+		page_ops->page_done(inode, pos, ret, &folio->page, iomap);
+	put_folio(folio);
 
 	if (ret < len)
 		iomap_write_failed(inode, pos, len);
@@ -719,14 +719,13 @@ iomap_write_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 	ssize_t written = 0;
 
 	do {
-		struct page *page;
+		struct folio *folio;
 		unsigned long offset;	/* Offset into pagecache page */
-		unsigned long bytes;	/* Bytes to write to page */
+		size_t bytes;		/* Bytes to write to page */
 		size_t copied;		/* Bytes copied from user */
 
 		offset = offset_in_page(pos);
-		bytes = min_t(unsigned long, PAGE_SIZE - offset,
-						iov_iter_count(i));
+		bytes = min_t(size_t, PAGE_SIZE - offset, iov_iter_count(i));
 again:
 		if (bytes > length)
 			bytes = length;
@@ -746,18 +745,21 @@ again:
 			break;
 		}
 
-		status = iomap_write_begin(inode, pos, bytes, 0, &page, iomap,
+		status = iomap_write_begin(inode, pos, bytes, 0, &folio, iomap,
 				srcmap);
 		if (unlikely(status))
 			break;
 
 		if (mapping_writably_mapped(inode->i_mapping))
-			flush_dcache_page(page);
+			flush_dcache_folio(folio);
 
-		copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
+		/* We may be part-way through a folio */
+		offset = offset_in_folio(folio, pos);
+		copied = iov_iter_copy_from_user_atomic(folio, i, offset,
+				bytes);
 
-		copied = iomap_write_end(inode, pos, bytes, copied, page, iomap,
-				srcmap);
+		copied = iomap_write_end(inode, pos, bytes, copied, folio,
+				iomap, srcmap);
 
 		cond_resched();
 
@@ -822,14 +824,14 @@ iomap_unshare_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 	do {
 		unsigned long offset = offset_in_page(pos);
 		unsigned long bytes = min_t(loff_t, PAGE_SIZE - offset, length);
-		struct page *page;
+		struct folio *folio;
 
 		status = iomap_write_begin(inode, pos, bytes,
-				IOMAP_WRITE_F_UNSHARE, &page, iomap, srcmap);
+				IOMAP_WRITE_F_UNSHARE, &folio, iomap, srcmap);
 		if (unlikely(status))
 			return status;
 
-		status = iomap_write_end(inode, pos, bytes, bytes, page, iomap,
+		status = iomap_write_end(inode, pos, bytes, bytes, folio, iomap,
 				srcmap);
 		if (WARN_ON_ONCE(status == 0))
 			return -EIO;
@@ -868,19 +870,19 @@ EXPORT_SYMBOL_GPL(iomap_file_unshare);
 static s64 iomap_zero(struct inode *inode, loff_t pos, u64 length,
 		struct iomap *iomap, struct iomap *srcmap)
 {
-	struct page *page;
+	struct folio *folio;
 	int status;
 	unsigned offset = offset_in_page(pos);
 	unsigned bytes = min_t(u64, PAGE_SIZE - offset, length);
 
-	status = iomap_write_begin(inode, pos, bytes, 0, &page, iomap, srcmap);
+	status = iomap_write_begin(inode, pos, bytes, 0, &folio, iomap, srcmap);
 	if (status)
 		return status;
 
-	zero_user(page, offset, bytes);
-	mark_page_accessed(page);
+	zero_user(&folio->page, offset, bytes);
+	mark_folio_accessed(folio);
 
-	return iomap_write_end(inode, pos, bytes, bytes, page, iomap, srcmap);
+	return iomap_write_end(inode, pos, bytes, bytes, folio, iomap, srcmap);
 }
 
 static loff_t iomap_zero_range_actor(struct inode *inode, loff_t pos,

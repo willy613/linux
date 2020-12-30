@@ -398,7 +398,8 @@ static noinline int btrfs_copy_from_user(loff_t pos, size_t write_bytes,
 		/*
 		 * Copy data from userspace to the current page
 		 */
-		copied = iov_iter_copy_from_user_atomic(page, i, offset, count);
+		copied = iov_iter_copy_from_user_atomic(page_folio(page), i,
+				offset, count);
 
 		/* Flush processor's dcache for this page */
 		flush_dcache_page(page);

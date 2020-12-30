@@ -10,6 +10,7 @@
 #include <uapi/linux/uio.h>
 
 struct page;
+struct folio;
 struct pipe_inode_info;
 
 struct kvec {
@@ -111,8 +112,8 @@ static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
 	};
 }
 
-size_t iov_iter_copy_from_user_atomic(struct page *page,
-		struct iov_iter *i, unsigned long offset, size_t bytes);
+size_t iov_iter_copy_from_user_atomic(struct folio *folio,
+		struct iov_iter *i, size_t offset, size_t bytes);
 void iov_iter_advance(struct iov_iter *i, size_t bytes);
 void iov_iter_revert(struct iov_iter *i, size_t bytes);
 int iov_iter_fault_in_readable(struct iov_iter *i, size_t bytes);

@@ -3496,6 +3496,7 @@ ssize_t generic_perform_write(struct file *file,
 
 	do {
 		struct page *page;
+		struct folio *folio;
 		unsigned long offset;	/* Offset into pagecache page */
 		unsigned long bytes;	/* Bytes to write to page */
 		size_t copied;		/* Bytes copied from user */
@@ -3531,14 +3532,16 @@ again:
 		if (unlikely(status < 0))
 			break;
 
+		folio = page_folio(page);
 		if (mapping_writably_mapped(mapping))
-			flush_dcache_page(page);
+			flush_dcache_folio(folio);
 
-		copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
-		flush_dcache_page(page);
+		copied = iov_iter_copy_from_user_atomic(folio, i, offset,
+							bytes);
+		flush_dcache_folio(folio);
 
 		status = a_ops->write_end(file, mapping, pos, bytes, copied,
-						page, fsdata);
+						&folio->page, fsdata);
 		if (unlikely(status < 0))
 			break;
 		copied = status;

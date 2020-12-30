@@ -989,16 +989,17 @@ size_t iov_iter_zero(size_t bytes, struct iov_iter *i)
 }
 EXPORT_SYMBOL(iov_iter_zero);
 
-size_t iov_iter_copy_from_user_atomic(struct page *page,
-		struct iov_iter *i, unsigned long offset, size_t bytes)
+size_t iov_iter_copy_from_user_atomic(struct folio *folio,
+		struct iov_iter *i, size_t offset, size_t bytes)
 {
-	char *kaddr = kmap_atomic(page), *p = kaddr + offset;
-	if (unlikely(!page_copy_sane(page, offset, bytes))) {
-		kunmap_atomic(kaddr);
+	char *p = kmap_local_folio(folio, offset);
+
+	if (unlikely(!page_copy_sane(&folio->page, offset, bytes))) {
+		kunmap_local(p);
 		return 0;
 	}
 	if (unlikely(iov_iter_is_pipe(i) || iov_iter_is_discard(i))) {
-		kunmap_atomic(kaddr);
+		kunmap_local(p);
 		WARN_ON(1);
 		return 0;
 	}
@@ -1008,7 +1009,7 @@ size_t iov_iter_copy_from_user_atomic(struct page *page,
 				 v.bv_offset, v.bv_len),
 		memcpy((p += v.iov_len) - v.iov_len, v.iov_base, v.iov_len)
 	)
-	kunmap_atomic(kaddr);
+	kunmap_local(p);
 	return bytes;
 }
 EXPORT_SYMBOL(iov_iter_copy_from_user_atomic);
