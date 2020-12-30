@@ -1542,9 +1542,9 @@ int __lock_folio_killable(struct folio *folio)
 }
 EXPORT_SYMBOL_GPL(__lock_folio_killable);
 
-int __lock_page_async(struct page *page, struct wait_page_queue *wait)
+int __lock_folio_async(struct folio *folio, struct wait_page_queue *wait)
 {
-	return __wait_on_page_locked_async(page, wait, true);
+	return __wait_on_page_locked_async(&folio->page, wait, true);
 }
 
 /*
@@ -2182,7 +2182,7 @@ static void shrink_readahead_size_eio(struct file_ra_state *ra)
 static int lock_page_for_iocb(struct kiocb *iocb, struct page *page)
 {
 	if (iocb->ki_flags & IOCB_WAITQ)
-		return lock_page_async(page, iocb->ki_waitq);
+		return lock_folio_async(page_folio(page), iocb->ki_waitq);
 	else if (iocb->ki_flags & IOCB_NOWAIT)
 		return trylock_page(page) ? 0 : -EAGAIN;
 	else

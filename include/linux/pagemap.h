@@ -601,7 +601,7 @@ static inline bool wake_page_match(struct wait_page_queue *wait_page,
 
 void __lock_folio(struct folio *folio);
 int __lock_folio_killable(struct folio *folio);
-extern int __lock_page_async(struct page *page, struct wait_page_queue *wait);
+int __lock_folio_async(struct folio *folio, struct wait_page_queue *wait);
 extern int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
 				unsigned int flags);
 void unlock_folio(struct folio *folio);
@@ -667,18 +667,18 @@ static inline int lock_page_killable(struct page *page)
 }
 
 /*
- * lock_page_async - Lock the page, unless this would block. If the page
- * is already locked, then queue a callback when the page becomes unlocked.
+ * lock_folio_async - Lock the folio, unless this would block. If the folio
+ * is already locked, then queue a callback when the folio becomes unlocked.
  * This callback can then retry the operation.
  *
- * Returns 0 if the page is locked successfully, or -EIOCBQUEUED if the page
+ * Returns 0 if the folio is locked successfully, or -EIOCBQUEUED if the folio
  * was already locked and the callback defined in 'wait' was queued.
  */
-static inline int lock_page_async(struct page *page,
+static inline int lock_folio_async(struct folio *folio,
 				  struct wait_page_queue *wait)
 {
-	if (!trylock_page(page))
-		return __lock_page_async(page, wait);
+	if (!trylock_folio(folio))
+		return __lock_folio_async(folio, wait);
 	return 0;
 }
 
