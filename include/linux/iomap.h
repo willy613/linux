@@ -158,8 +158,7 @@ ssize_t iomap_file_buffered_write(struct kiocb *iocb, struct iov_iter *from,
 int iomap_readpage(struct folio *folio, const struct iomap_ops *ops);
 void iomap_readahead(struct readahead_control *, const struct iomap_ops *ops);
 #define iomap_set_page_dirty	__set_page_dirty_nobuffers
-int iomap_is_partially_uptodate(struct page *page, unsigned long from,
-		unsigned long count);
+bool iomap_is_partially_uptodate(struct folio *, size_t from, size_t count);
 int iomap_releasepage(struct page *page, gfp_t gfp_mask);
 void iomap_invalidatepage(struct page *page, unsigned int offset,
 		unsigned int len);

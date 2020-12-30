@@ -2252,6 +2252,7 @@ generic_file_buffered_read_pagenotuptodate(struct kiocb *iocb,
 					   struct page *page,
 					   loff_t pos, loff_t count)
 {
+	struct folio *folio = page_folio(page);
 	struct address_space *mapping = filp->f_mapping;
 	struct inode *inode = mapping->host;
 	int error;
@@ -2262,16 +2263,15 @@ generic_file_buffered_read_pagenotuptodate(struct kiocb *iocb,
 	 * serialisations and why it's safe.
 	 */
 	if (iocb->ki_flags & IOCB_WAITQ) {
-		error = wait_on_folio_locked_async(page_folio(page),
-						iocb->ki_waitq);
+		error = wait_on_folio_locked_async(folio, iocb->ki_waitq);
 	} else {
-		error = wait_on_page_locked_killable(page);
+		error = wait_on_folio_locked_killable(folio);
 	}
 	if (unlikely(error)) {
-		put_page(page);
+		put_folio(folio);
 		return ERR_PTR(error);
 	}
-	if (PageUptodate(page))
+	if (FolioUptodate(folio))
 		return page;
 
 	if (inode->i_blkbits == PAGE_SHIFT ||
@@ -2280,36 +2280,36 @@ generic_file_buffered_read_pagenotuptodate(struct kiocb *iocb,
 	/* pipes can't handle partially uptodate pages */
 	if (unlikely(iov_iter_is_pipe(iter)))
 		goto page_not_up_to_date;
-	if (!trylock_page(page))
+	if (!trylock_folio(folio))
 		goto page_not_up_to_date;
 	/* Did it get truncated before we got the lock? */
-	if (!page->mapping)
+	if (!folio->page.mapping)
 		goto page_not_up_to_date_locked;
-	if (!mapping->a_ops->is_partially_uptodate(page,
-				pos & ~PAGE_MASK, count))
+	if (!mapping->a_ops->is_partially_uptodate(folio,
+				offset_in_folio(folio, pos), count))
 		goto page_not_up_to_date_locked;
-	unlock_page(page);
+	unlock_folio(folio);
 	return page;
 
 page_not_up_to_date:
 	/* Get exclusive access to the page ... */
-	error = lock_folio_for_iocb(iocb, page_folio(page));
+	error = lock_folio_for_iocb(iocb, folio);
 	if (unlikely(error)) {
-		put_page(page);
+		put_folio(folio);
 		return ERR_PTR(error);
 	}
 
 page_not_up_to_date_locked:
 	/* Did it get truncated before we got the lock? */
-	if (!page->mapping) {
-		unlock_page(page);
-		put_page(page);
+	if (!folio->page.mapping) {
+		unlock_folio(folio);
+		put_folio(folio);
 		return NULL;
 	}
 
 	/* Did somebody else fill it already? */
-	if (PageUptodate(page)) {
-		unlock_page(page);
+	if (FolioUptodate(folio)) {
+		unlock_folio(folio);
 		return page;
 	}
 
@@ -2670,8 +2670,7 @@ static inline loff_t folio_seek_hole_data(struct xa_state *xas,
 	offset = offset_in_folio(folio, start) & ~(bsz - 1);
 
 	do {
-		if (ops->is_partially_uptodate(&folio->page, offset, bsz) ==
-							seek_data)
+		if (ops->is_partially_uptodate(folio, offset, bsz) == seek_data)
 			break;
 		start = (start + bsz) & ~(bsz - 1);
 		offset += bsz;
