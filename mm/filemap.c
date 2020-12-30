@@ -1343,22 +1343,22 @@ int wait_on_page_bit_killable(struct page *page, int bit_nr)
 }
 EXPORT_SYMBOL(wait_on_page_bit_killable);
 
-static int __wait_on_page_locked_async(struct page *page,
+static int __wait_on_folio_locked_async(struct folio *folio,
 				       struct wait_page_queue *wait, bool set)
 {
-	struct wait_queue_head *q = page_waitqueue(page);
+	struct wait_queue_head *q = page_waitqueue(&folio->page);
 	int ret = 0;
 
-	wait->page = page;
+	wait->page = &folio->page;
 	wait->bit_nr = PG_locked;
 
 	spin_lock_irq(&q->lock);
 	__add_wait_queue_entry_tail(q, &wait->wait);
-	SetPageWaiters(page);
+	SetFolioWaiters(folio);
 	if (set)
-		ret = !trylock_page(page);
+		ret = !trylock_folio(folio);
 	else
-		ret = PageLocked(page);
+		ret = FolioLocked(folio);
 	/*
 	 * If we were successful now, we know we're still on the
 	 * waitqueue as we're still under the lock. This means it's
@@ -1373,12 +1373,12 @@ static int __wait_on_page_locked_async(struct page *page,
 	return ret;
 }
 
-static int wait_on_page_locked_async(struct page *page,
+static int wait_on_folio_locked_async(struct folio *folio,
 				     struct wait_page_queue *wait)
 {
-	if (!PageLocked(page))
+	if (!FolioLocked(folio))
 		return 0;
-	return __wait_on_page_locked_async(compound_head(page), wait, false);
+	return __wait_on_folio_locked_async(folio, wait, false);
 }
 
 /**
@@ -1544,7 +1544,7 @@ EXPORT_SYMBOL_GPL(__lock_folio_killable);
 
 int __lock_folio_async(struct folio *folio, struct wait_page_queue *wait)
 {
-	return __wait_on_page_locked_async(&folio->page, wait, true);
+	return __wait_on_folio_locked_async(folio, wait, true);
 }
 
 /*
@@ -2261,7 +2261,7 @@ generic_file_buffered_read_pagenotuptodate(struct kiocb *iocb,
 	 * serialisations and why it's safe.
 	 */
 	if (iocb->ki_flags & IOCB_WAITQ) {
-		error = wait_on_page_locked_async(page,
+		error = wait_on_folio_locked_async(page_folio(page),
 						iocb->ki_waitq);
 	} else {
 		error = wait_on_page_locked_killable(page);
