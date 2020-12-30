@@ -2179,14 +2179,14 @@ static void shrink_readahead_size_eio(struct file_ra_state *ra)
 	ra->ra_pages /= 4;
 }
 
-static int lock_page_for_iocb(struct kiocb *iocb, struct page *page)
+static int lock_folio_for_iocb(struct kiocb *iocb, struct folio *folio)
 {
 	if (iocb->ki_flags & IOCB_WAITQ)
-		return lock_folio_async(page_folio(page), iocb->ki_waitq);
+		return lock_folio_async(folio, iocb->ki_waitq);
 	else if (iocb->ki_flags & IOCB_NOWAIT)
-		return trylock_page(page) ? 0 : -EAGAIN;
+		return trylock_folio(folio) ? 0 : -EAGAIN;
 	else
-		return lock_page_killable(page);
+		return lock_folio_killable(folio);
 }
 
 static struct page *
@@ -2219,7 +2219,7 @@ generic_file_buffered_read_readpage(struct kiocb *iocb,
 	}
 
 	if (!PageUptodate(page)) {
-		error = lock_page_for_iocb(iocb, page);
+		error = lock_folio_for_iocb(iocb, page_folio(page));
 		if (unlikely(error)) {
 			put_page(page);
 			return ERR_PTR(error);
@@ -2292,7 +2292,7 @@ generic_file_buffered_read_pagenotuptodate(struct kiocb *iocb,
 
 page_not_up_to_date:
 	/* Get exclusive access to the page ... */
-	error = lock_page_for_iocb(iocb, page);
+	error = lock_folio_for_iocb(iocb, page_folio(page));
 	if (unlikely(error)) {
 		put_page(page);
 		return ERR_PTR(error);
