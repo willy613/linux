@@ -32,17 +32,10 @@ struct iomap_page {
 	unsigned long		uptodate[];
 };
 
-static inline struct iomap_page *to_iomap_page(struct page *page)
+static inline struct iomap_page *to_iomap_page(struct folio *folio)
 {
-	/*
-	 * per-block data is stored in the head page.  Callers should
-	 * not be dealing with tail pages (and if they are, they can
-	 * call thp_head() first.
-	 */
-	VM_BUG_ON_PGFLAGS(PageTail(page), page);
-
-	if (page_has_private(page))
-		return (struct iomap_page *)page_private(page);
+	if (folio_has_private(folio))
+		return (struct iomap_page *)page_private(&folio->page);
 	return NULL;
 }
 
@@ -52,7 +45,7 @@ static struct iomap_page *
 iomap_page_create(struct inode *inode, struct page *page)
 {
 	struct folio *folio = page_folio(page);
-	struct iomap_page *iop = to_iomap_page(page);
+	struct iomap_page *iop = to_iomap_page(folio);
 	unsigned int nr_blocks = i_blocks_per_folio(inode, folio);
 
 	if (iop || nr_blocks <= 1)
@@ -147,7 +140,7 @@ static void
 iomap_iop_set_range_uptodate(struct page *page, unsigned off, unsigned len)
 {
 	struct folio *folio = page_folio(page);
-	struct iomap_page *iop = to_iomap_page(page);
+	struct iomap_page *iop = to_iomap_page(folio);
 	struct inode *inode = page->mapping->host;
 	unsigned first = off >> inode->i_blkbits;
 	unsigned last = (off + len - 1) >> inode->i_blkbits;
@@ -176,7 +169,7 @@ static void
 iomap_read_page_end_io(struct bio_vec *bvec, int error)
 {
 	struct page *page = bvec->bv_page;
-	struct iomap_page *iop = to_iomap_page(page);
+	struct iomap_page *iop = to_iomap_page(page_folio(page));
 
 	if (unlikely(error)) {
 		ClearPageUptodate(page);
@@ -432,7 +425,7 @@ EXPORT_SYMBOL_GPL(iomap_readahead);
  */
 bool iomap_is_partially_uptodate(struct folio *folio, size_t from, size_t count)
 {
-	struct iomap_page *iop = to_iomap_page(&folio->page);
+	struct iomap_page *iop = to_iomap_page(folio);
 	struct inode *inode = folio->page.mapping->host;
 	size_t len;
 	unsigned first, last, i;
@@ -1016,7 +1009,7 @@ iomap_finish_page_writeback(struct inode *inode, struct page *page,
 		int error, unsigned int len)
 {
 	struct folio *folio = page_folio(page);
-	struct iomap_page *iop = to_iomap_page(page);
+	struct iomap_page *iop = to_iomap_page(folio);
 
 	if (error) {
 		SetFolioError(folio);
@@ -1314,7 +1307,7 @@ iomap_writepage_map(struct iomap_writepage_ctx *wpc,
 		struct page *page, u64 end_offset)
 {
 	struct folio *folio = page_folio(page);
-	struct iomap_page *iop = to_iomap_page(page);
+	struct iomap_page *iop = to_iomap_page(folio);
 	struct iomap_ioend *ioend, *next;
 	unsigned len = i_blocksize(inode);
 	u64 file_offset; /* file offset of page */
