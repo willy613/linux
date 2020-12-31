@@ -602,7 +602,7 @@ static inline bool wake_page_match(struct wait_page_queue *wait_page,
 void __lock_folio(struct folio *folio);
 int __lock_folio_killable(struct folio *folio);
 int __lock_folio_async(struct folio *folio, struct wait_page_queue *wait);
-extern int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
+int __lock_folio_or_retry(struct folio *folio, struct mm_struct *mm,
 				unsigned int flags);
 void unlock_folio(struct folio *folio);
 
@@ -683,17 +683,17 @@ static inline int lock_folio_async(struct folio *folio,
 }
 
 /*
- * lock_page_or_retry - Lock the page, unless this would block and the
+ * lock_folio_or_retry - Lock the folio, unless this would block and the
  * caller indicated that it can handle a retry.
  *
  * Return value and mmap_lock implications depend on flags; see
- * __lock_page_or_retry().
+ * __lock_folio_or_retry().
  */
-static inline int lock_page_or_retry(struct page *page, struct mm_struct *mm,
+static inline int lock_folio_or_retry(struct folio *folio, struct mm_struct *mm,
 				     unsigned int flags)
 {
 	might_sleep();
-	return trylock_page(page) || __lock_page_or_retry(page, mm, flags);
+	return trylock_folio(folio) || __lock_folio_or_retry(folio, mm, flags);
 }
 
 /*
