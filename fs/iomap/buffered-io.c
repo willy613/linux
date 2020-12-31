@@ -137,11 +137,10 @@ static void iomap_adjust_read_range(struct inode *inode, struct folio *folio,
 }
 
 static void
-iomap_iop_set_range_uptodate(struct page *page, unsigned off, unsigned len)
+iomap_iop_set_range_uptodate(struct folio *folio, size_t off, size_t len)
 {
-	struct folio *folio = page_folio(page);
 	struct iomap_page *iop = to_iomap_page(folio);
-	struct inode *inode = page->mapping->host;
+	struct inode *inode = folio->page.mapping->host;
 	unsigned first = off >> inode->i_blkbits;
 	unsigned last = (off + len - 1) >> inode->i_blkbits;
 	unsigned long flags;
@@ -154,32 +153,32 @@ iomap_iop_set_range_uptodate(struct page *page, unsigned off, unsigned len)
 }
 
 static void
-iomap_set_range_uptodate(struct page *page, unsigned off, unsigned len)
+iomap_set_range_uptodate(struct folio *folio, size_t off, size_t len)
 {
-	if (PageError(page))
+	if (FolioError(folio))
 		return;
 
-	if (page_has_private(page))
-		iomap_iop_set_range_uptodate(page, off, len);
+	if (folio_has_private(folio))
+		iomap_iop_set_range_uptodate(folio, off, len);
 	else
-		SetPageUptodate(page);
+		SetFolioUptodate(folio);
 }
 
 static void
 iomap_read_page_end_io(struct bio_vec *bvec, int error)
 {
-	struct page *page = bvec->bv_page;
-	struct iomap_page *iop = to_iomap_page(page_folio(page));
+	struct folio *folio = page_folio(bvec->bv_page);
+	struct iomap_page *iop = to_iomap_page(folio);
 
 	if (unlikely(error)) {
-		ClearPageUptodate(page);
-		SetPageError(page);
+		ClearFolioUptodate(folio);
+		SetFolioError(folio);
 	} else {
-		iomap_set_range_uptodate(page, bvec->bv_offset, bvec->bv_len);
+		iomap_set_range_uptodate(folio, bvec->bv_offset, bvec->bv_len);
 	}
 
 	if (!iop || atomic_sub_and_test(bvec->bv_len, &iop->read_bytes_pending))
-		unlock_page(page);
+		unlock_folio(folio);
 }
 
 static void
@@ -255,7 +254,7 @@ iomap_readpage_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 
 	if (iomap_block_needs_zeroing(inode, iomap, pos)) {
 		zero_user(page, poff, plen);
-		iomap_set_range_uptodate(page, poff, plen);
+		iomap_set_range_uptodate(folio, poff, plen);
 		goto done;
 	}
 
@@ -554,7 +553,8 @@ __iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, int flags,
 	ClearPageError(page);
 
 	do {
-		iomap_adjust_read_range(inode, page_folio(page), &block_start,
+		struct folio *folio = page_folio(page);
+		iomap_adjust_read_range(inode, folio, &block_start,
 				block_end - block_start, &poff, &plen);
 		if (plen == 0)
 			break;
@@ -574,7 +574,7 @@ __iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, int flags,
 			if (status)
 				return status;
 		}
-		iomap_set_range_uptodate(page, poff, plen);
+		iomap_set_range_uptodate(folio, poff, plen);
 	} while ((block_start += plen) < block_end);
 
 	return 0;
@@ -636,6 +636,7 @@ out_no_page:
 static size_t __iomap_write_end(struct inode *inode, loff_t pos, size_t len,
 		size_t copied, struct page *page)
 {
+	struct folio *folio = page_folio(page);
 	flush_dcache_page(page);
 
 	/*
@@ -649,10 +650,10 @@ static size_t __iomap_write_end(struct inode *inode, loff_t pos, size_t len,
 	 * uptodate page as a zero-length write, and force the caller to redo
 	 * the whole thing.
 	 */
-	if (unlikely(copied < len && !PageUptodate(page)))
+	if (unlikely(copied < len && !FolioUptodate(folio)))
 		return 0;
-	iomap_set_range_uptodate(page, offset_in_page(pos), len);
-	iomap_set_page_dirty(inode->i_mapping, page_folio(page));
+	iomap_set_range_uptodate(folio, offset_in_folio(folio, pos), len);
+	iomap_set_page_dirty(inode->i_mapping, folio);
 	return copied;
 }
 
