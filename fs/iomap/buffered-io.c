@@ -42,9 +42,8 @@ static inline struct iomap_page *to_iomap_page(struct folio *folio)
 static struct bio_set iomap_ioend_bioset;
 
 static struct iomap_page *
-iomap_page_create(struct inode *inode, struct page *page)
+iomap_page_create(struct inode *inode, struct folio *folio)
 {
-	struct folio *folio = page_folio(page);
 	struct iomap_page *iop = to_iomap_page(folio);
 	unsigned int nr_blocks = i_blocks_per_folio(inode, folio);
 
@@ -56,7 +55,7 @@ iomap_page_create(struct inode *inode, struct page *page)
 	spin_lock_init(&iop->uptodate_lock);
 	if (FolioUptodate(folio))
 		bitmap_fill(iop->uptodate, nr_blocks);
-	attach_page_private(page, iop);
+	attach_page_private(&folio->page, iop);
 	return iop;
 }
 
@@ -232,7 +231,7 @@ iomap_readpage_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 	struct iomap_readpage_ctx *ctx = data;
 	struct folio *folio = ctx->cur_folio;
 	struct page *page = &folio->page;
-	struct iomap_page *iop = iomap_page_create(inode, page);
+	struct iomap_page *iop = iomap_page_create(inode, folio);
 	bool same_page = false, is_contig = false;
 	loff_t orig_pos = pos;
 	size_t poff, plen;
@@ -538,19 +537,19 @@ static int
 __iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, int flags,
 		struct page *page, struct iomap *srcmap)
 {
+	struct folio *folio = page_folio(page);
 	loff_t block_size = i_blocksize(inode);
 	loff_t block_start = round_down(pos, block_size);
 	loff_t block_end = round_up(pos + len, block_size);
-	unsigned from = offset_in_page(pos), to = from + len;
+	size_t from = offset_in_folio(folio, pos), to = from + len;
 	size_t poff, plen;
 
-	iomap_page_create(inode, page);
-	if (PageUptodate(page))
+	iomap_page_create(inode, folio);
+	if (FolioUptodate(folio))
 		return 0;
-	ClearPageError(page);
+	ClearFolioError(folio);
 
 	do {
-		struct folio *folio = page_folio(page);
 		iomap_adjust_read_range(inode, folio, &block_start,
 				block_end - block_start, &poff, &plen);
 		if (plen == 0)
@@ -564,10 +563,11 @@ __iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, int flags,
 		if (iomap_block_needs_zeroing(inode, srcmap, block_start)) {
 			if (WARN_ON_ONCE(flags & IOMAP_WRITE_F_UNSHARE))
 				return -EIO;
-			zero_user_segments(page, poff, from, to, poff + plen);
+			zero_user_segments(&folio->page, poff, from, to,
+					poff + plen);
 		} else {
-			int status = iomap_read_page_sync(block_start, page,
-					poff, plen, srcmap);
+			int status = iomap_read_page_sync(block_start,
+					&folio->page, poff, plen, srcmap);
 			if (status)
 				return status;
 		}
@@ -964,7 +964,7 @@ iomap_page_mkwrite_actor(struct inode *inode, loff_t pos, loff_t length,
 		block_commit_write(&folio->page, 0, length);
 	} else {
 		WARN_ON_ONCE(!FolioUptodate(folio));
-		iomap_page_create(inode, &folio->page);
+		iomap_page_create(inode, folio);
 		set_folio_dirty(folio);
 	}
 
