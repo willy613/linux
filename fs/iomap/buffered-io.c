@@ -518,9 +518,8 @@ iomap_write_failed(struct inode *inode, loff_t pos, unsigned len)
 		truncate_pagecache_range(inode, max(pos, i_size), pos + len);
 }
 
-static int
-iomap_read_page_sync(loff_t block_start, struct page *page, unsigned poff,
-		unsigned plen, struct iomap *iomap)
+static int iomap_read_folio_sync(loff_t block_start, struct folio *folio,
+		size_t poff, size_t plen, struct iomap *iomap)
 {
 	struct bio_vec bvec;
 	struct bio bio;
@@ -529,7 +528,7 @@ iomap_read_page_sync(loff_t block_start, struct page *page, unsigned poff,
 	bio.bi_opf = REQ_OP_READ;
 	bio.bi_iter.bi_sector = iomap_sector(iomap, block_start);
 	bio_set_dev(&bio, iomap->bdev);
-	__bio_add_page(&bio, page, plen, poff);
+	__bio_add_page(&bio, &folio->page, plen, poff);
 	return submit_bio_wait(&bio);
 }
 
@@ -566,8 +565,8 @@ __iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, int flags,
 			zero_user_segments(&folio->page, poff, from, to,
 					poff + plen);
 		} else {
-			int status = iomap_read_page_sync(block_start,
-					&folio->page, poff, plen, srcmap);
+			int status = iomap_read_folio_sync(block_start,
+					folio, poff, plen, srcmap);
 			if (status)
 				return status;
 		}
