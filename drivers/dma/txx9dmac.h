@@ -26,11 +26,6 @@
  * DMA channel.
  */
 
-#ifdef CONFIG_MACH_TX49XX
-static inline bool txx9_dma_have_SMPCHN(void)
-{
-	return true;
-}
 #define TXX9_DMA_USE_SIMPLE_CHAIN
 #else
 static inline bool txx9_dma_have_SMPCHN(void)
@@ -40,13 +35,8 @@ static inline bool txx9_dma_have_SMPCHN(void)
 #endif
 
 #ifdef __LITTLE_ENDIAN
-#ifdef CONFIG_MACH_TX49XX
-#define CCR_LE	TXX9_DMA_CCR_LE
-#define MCR_LE	0
-#else
 #define CCR_LE	0
 #define MCR_LE	TXX9_DMA_MCR_LE
-#endif
 #else
 #define CCR_LE	0
 #define MCR_LE	0
