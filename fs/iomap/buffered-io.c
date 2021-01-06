@@ -230,7 +230,6 @@ iomap_readpage_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 {
 	struct iomap_readpage_ctx *ctx = data;
 	struct folio *folio = ctx->cur_folio;
-	struct page *page = &folio->page;
 	struct iomap_page *iop = iomap_page_create(inode, folio);
 	bool same_page = false, is_contig = false;
 	loff_t orig_pos = pos;
@@ -239,7 +238,7 @@ iomap_readpage_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 
 	if (iomap->type == IOMAP_INLINE) {
 		WARN_ON_ONCE(pos);
-		iomap_read_inline_data(inode, page, iomap);
+		iomap_read_inline_data(inode, &folio->page, iomap);
 		return PAGE_SIZE;
 	}
 
@@ -249,7 +248,7 @@ iomap_readpage_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 		goto done;
 
 	if (iomap_block_needs_zeroing(inode, iomap, pos)) {
-		zero_user(page, poff, plen);
+		zero_user(&folio->page, poff, plen);
 		iomap_set_range_uptodate(folio, poff, plen);
 		goto done;
 	}
@@ -261,14 +260,15 @@ iomap_readpage_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 	/* Try to merge into a previous segment if we can */
 	sector = iomap_sector(iomap, pos);
 	if (ctx->bio && bio_end_sector(ctx->bio) == sector) {
-		if (__bio_try_merge_page(ctx->bio, page, plen, poff,
+		if (__bio_try_merge_page(ctx->bio, &folio->page, plen, poff,
 				&same_page))
 			goto done;
 		is_contig = true;
 	}
 
 	if (!is_contig || bio_full(ctx->bio, plen)) {
-		gfp_t gfp = mapping_gfp_constraint(page->mapping, GFP_KERNEL);
+		gfp_t gfp = mapping_gfp_constraint(folio->page.mapping,
+							GFP_KERNEL);
 		gfp_t orig_gfp = gfp;
 		int nr_vecs = (length + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
@@ -293,7 +293,7 @@ iomap_readpage_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 		ctx->bio->bi_end_io = iomap_read_end_io;
 	}
 
-	bio_add_page(ctx->bio, page, plen, poff);
+	bio_add_page(ctx->bio, &folio->page, plen, poff);
 done:
 	/*
 	 * Move the caller beyond our range so that it keeps making progress.
