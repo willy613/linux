@@ -39,6 +39,22 @@ static inline struct iomap_page *to_iomap_page(struct folio *folio)
 	return NULL;
 }
 
+void dump_iomap_page(struct page *page, const char *reason)
+{
+	struct folio *folio = page_folio(page);
+	struct iomap_page *iop = to_iomap_page(folio);
+	unsigned int nr_blocks = i_blocks_per_folio(page->mapping->host, folio);
+
+       dump_page(page, reason);
+       if (iop)
+               printk("iop:reads %d writes %d uptodate %*pb\n",
+                               atomic_read(&iop->read_bytes_pending),
+                               atomic_read(&iop->write_bytes_pending),
+                               nr_blocks, iop->uptodate);
+       else
+               printk("iop:none\n");
+}
+
 static struct bio_set iomap_ioend_bioset;
 
 static struct iomap_page *
