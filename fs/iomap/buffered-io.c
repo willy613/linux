@@ -196,24 +196,24 @@ struct iomap_readpage_ctx {
 	struct readahead_control *rac;
 };
 
-static void
-iomap_read_inline_data(struct inode *inode, struct page *page,
+static void iomap_read_inline_data(struct inode *inode, struct folio *folio,
 		struct iomap *iomap)
 {
 	size_t size = i_size_read(inode);
 	void *addr;
 
-	if (PageUptodate(page))
+	if (FolioUptodate(folio))
 		return;
 
-	BUG_ON(page->index);
+	BUG_ON(folio->page.index);
+	BUG_ON(FolioMulti(folio));
 	BUG_ON(size > PAGE_SIZE - offset_in_page(iomap->inline_data));
 
-	addr = kmap_atomic(page);
+	addr = kmap_local_page(&folio->page);
 	memcpy(addr, iomap->inline_data, size);
 	memset(addr + size, 0, PAGE_SIZE - size);
-	kunmap_atomic(addr);
-	SetPageUptodate(page);
+	kunmap_local(addr);
+	SetFolioUptodate(folio);
 }
 
 static inline bool iomap_block_needs_zeroing(struct inode *inode,
@@ -238,7 +238,7 @@ iomap_readpage_actor(struct inode *inode, loff_t pos, loff_t length, void *data,
 
 	if (iomap->type == IOMAP_INLINE) {
 		WARN_ON_ONCE(pos);
-		iomap_read_inline_data(inode, &folio->page, iomap);
+		iomap_read_inline_data(inode, folio, iomap);
 		return PAGE_SIZE;
 	}
 
@@ -605,7 +605,7 @@ iomap_write_begin(struct inode *inode, loff_t pos, unsigned len, unsigned flags,
 	}
 
 	if (srcmap->type == IOMAP_INLINE)
-		iomap_read_inline_data(inode, page, srcmap);
+		iomap_read_inline_data(inode, page_folio(page), srcmap);
 	else if (iomap->flags & IOMAP_F_BUFFER_HEAD)
 		status = __block_write_begin_int(page, pos, len, NULL, srcmap);
 	else
